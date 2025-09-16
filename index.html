@@ -384,6 +384,47 @@
                 grid-template-columns: 1fr;
             }
         }
+        /* Sistema universal de modales */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .modal-title {
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
     </style>
 </head>
 <body>
@@ -718,6 +759,48 @@
 
     <script>
         const API_BASE = 'https://sistema-gestiona-financiera.onrender.com';
+
+        // Variables globales
+        let editingId = null;
+        let currentModal = null;
+
+        // Sistema universal de modales
+        function createModal(content, title = '') {
+            // Cerrar modal existente si hay uno
+            if (currentModal) {
+                currentModal.remove();
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-overlay-bg" onclick="closeModal()"></div>
+                <div class="modal-content">
+                    ${title ? `<h3 class="modal-title">${title}</h3>` : ''}
+                    ${content}
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            currentModal = modal;
+            
+            return modal;
+        }
+
+        // Función para cerrar cualquier modal
+        function closeModal() {
+            if (currentModal) {
+                currentModal.remove();
+                currentModal = null;
+            }
+        }
+
+        // Cerrar modal con tecla Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && currentModal) {
+                closeModal();
+            }
+        });
 
         // Navegación
         function showSection(sectionId) {
@@ -1283,7 +1366,7 @@ async function showNewOrdenModal() {
                         </div>
                         
                         <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn" onclick="closeOrdenModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                            <button type="button" class="btn" onclick="closeModal()" style="flex: 1; background: #718096;">Cancelar</button>
                             <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Orden</button>
                         </div>
                     </form>
