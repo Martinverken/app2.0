@@ -1044,7 +1044,7 @@
                                 <input type="text" name="contacto" class="form-input">
                             </div>
                             <div style="display: flex; gap: 1rem;">
-                                <button type="button" class="btn" onclick="this.closest('[style*=\"position: fixed\"]').remove()" style="flex: 1; background: #718096;">Cancelar</button>
+                                <button type="button" class="btn" onclick="closeModal()" style="flex: 1; background: #718096;">Cancelar</button>
                                 <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Proveedor</button>
                             </div>
                         </form>
@@ -1201,6 +1201,12 @@ function formatNumber(num) {
     }).format(num);
 }
 
+// Función para cerrar cualquier modal
+function closeModal() {
+    const modals = document.querySelectorAll('[style*="position: fixed"]');
+    modals.forEach(modal => modal.remove());
+}
+
 // Mostrar modal para nueva orden
 async function showNewOrdenModal() {
     try {
@@ -1257,7 +1263,7 @@ async function showNewOrdenModal() {
                         </div>
                         
                         <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn" onclick="this.closest('[style*=\"position: fixed\"]').remove()" style="flex: 1; background: #718096;">Cancelar</button>
+                            <button type="button" class="btn" onclick="closeModal()" style="flex: 1; background: #718096;">Cancelar</button>
                             <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Orden</button>
                         </div>
                     </form>
