@@ -717,7 +717,7 @@
     </div>
 
     <script>
-        const API_BASE = 'https://7fe649dd9a5c.ngrok-free.app';
+        const API_BASE = 'https://sistema-gestiona-financiera.onrender.com';
 
         // Navegación
         function showSection(sectionId) {
@@ -1135,6 +1135,176 @@
             }
         }
 
+    
+// Cargar órdenes de compra
+async function loadOrdenesCompra() {
+    const container = document.getElementById('ordenes-compra-list');
+    container.innerHTML = '<div class="loading">Cargando órdenes de compra...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/ordenes`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Fecha</th>
+                            <th>Marca</th>
+                            <th>Proveedor</th>
+                            <th>Valor USD</th>
+                            <th>Anticipo</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.data.map(orden => `
+                            <tr>
+                                <td><strong>${orden.numero_orden}</strong></td>
+                                <td>${orden.fecha ? new Date(orden.fecha).toLocaleDateString() : 'Sin fecha'}</td>
+                                <td>
+                                    <span class="status-badge ${orden.marca === 'Verken' ? 'status-pendiente' : 'status-pagada'}">
+                                        ${orden.marca}
+                                    </span>
+                                </td>
+                                <td>
+                                    ${orden.proveedores ? orden.proveedores.nombre : 'Sin proveedor'}
+                                    ${orden.proveedores ? `<br><small style="color: #718096;">${orden.proveedores.pais_origen}</small>` : ''}
+                                </td>
+                                <td>$${formatNumber(orden.valor_usd)}</td>
+                                <td>$${formatNumber(orden.monto_anticipo_pagado || 0)}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="editOrden('${orden.id}')" style="margin-right: 0.5rem;">✏️</button>
+                                    <button class="btn btn-danger" onclick="deleteOrden('${orden.id}', '${orden.numero_orden}')">🗑️</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay órdenes de compra registradas</p>';
+        }
+    } catch (error) {
+        console.error('Error cargando órdenes:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar órdenes de compra</p>';
+    }
+}
+
+// Función auxiliar para formatear números
+function formatNumber(num) {
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(num);
+}
+
+// Mostrar modal para nueva orden
+async function showNewOrdenModal() {
+    try {
+        const response = await fetch(`${API_BASE}/api/proveedores`);
+        const data = await response.json();
+        
+        if (!data.success || data.data.length === 0) {
+            showAlert('Primero debes crear proveedores antes de crear órdenes', 'error');
+            return;
+        }
+        
+        const proveedoresOptions = data.data.map(p => 
+            `<option value="${p.id}">${p.nombre} (${p.pais_origen})</option>`
+        ).join('');
+        
+        const modal = document.createElement('div');
+        modal.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+                <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px;">
+                    <h3 style="margin-bottom: 1.5rem;">Nueva Orden de Compra</h3>
+                    <form id="nueva-orden-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label class="form-label">Número de Orden *</label>
+                                <input type="text" name="numero_orden" class="form-input" required>
+                            </div>
+                            <div>
+                                <label class="form-label">Fecha</label>
+                                <input type="date" name="fecha" class="form-input">
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label class="form-label">Marca *</label>
+                                <select name="marca" class="form-input" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Verken">Verken</option>
+                                    <option value="Kaut">Kaut</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Proveedor *</label>
+                                <select name="proveedor_id" class="form-input" required>
+                                    <option value="">Seleccionar...</option>
+                                    ${proveedoresOptions}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label class="form-label">Valor USD *</label>
+                            <input type="number" name="valor_usd" class="form-input" step="0.01" required>
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="button" class="btn" onclick="this.closest('[style*=\"position: fixed\"]').remove()" style="flex: 1; background: #718096;">Cancelar</button>
+                            <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Orden</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Manejar envío del formulario
+        document.getElementById('nueva-orden-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = {
+                numero_orden: formData.get('numero_orden'),
+                fecha: formData.get('fecha') || null,
+                marca: formData.get('marca'),
+                proveedor_id: formData.get('proveedor_id'),
+                valor_usd: parseFloat(formData.get('valor_usd'))
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/ordenes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    modal.remove();
+                    loadOrdenesCompra();
+                    showAlert(result.message, 'success');
+                } else {
+                    showAlert('Error: ' + result.detail, 'error');
+                }
+            } catch (error) {
+                showAlert('Error de conexión', 'error');
+            }
+        });
+        
+    } catch (error) {
+        showAlert('Error al cargar proveedores', 'error');
+    }
+}
+    
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
             // Mostrar la sección de resumen financiero por defecto
@@ -1143,3 +1313,4 @@
     </script>
 </body>
 </html>
+
