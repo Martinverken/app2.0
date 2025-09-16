@@ -760,47 +760,8 @@
     <script>
         const API_BASE = 'https://sistema-gestiona-financiera.onrender.com';
 
-        // Variables globales
-        let editingId = null;
-        let currentModal = null;
+    
 
-        // Sistema universal de modales
-        function createModal(content, title = '') {
-            // Cerrar modal existente si hay uno
-            if (currentModal) {
-                currentModal.remove();
-            }
-            
-            const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
-            modal.innerHTML = `
-                <div class="modal-overlay-bg" onclick="closeModal()"></div>
-                <div class="modal-content">
-                    ${title ? `<h3 class="modal-title">${title}</h3>` : ''}
-                    ${content}
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-            currentModal = modal;
-            
-            return modal;
-        }
-
-        // Función para cerrar cualquier modal
-        function closeModal() {
-            if (currentModal) {
-                currentModal.remove();
-                currentModal = null;
-            }
-        }
-
-        // Cerrar modal con tecla Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && currentModal) {
-                closeModal();
-            }
-        });
 
         // Navegación
         function showSection(sectionId) {
@@ -1129,7 +1090,7 @@
                                 <input type="text" name="contacto" class="form-input">
                             </div>
                             <div style="display: flex; gap: 1rem;">
-                                <button type="button" class="btn" onclick="closeProveedorModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                                <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
                                 <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Proveedor</button>
                             </div>
                         </form>
@@ -1286,26 +1247,12 @@ function formatNumber(num) {
     }).format(num);
 }
 
-// Función para cerrar modal de proveedor
-function closeProveedorModal() {
-    const modal = document.querySelector('#proveedor-modal');
-    if (modal) {
-        modal.remove();
+// Función simple para cerrar modales
+function cerrarModal() {
+    const modals = document.getElementsByClassName('modal-simple');
+    for (let i = modals.length - 1; i >= 0; i--) {
+        modals[i].remove();
     }
-}
-
-// Función para cerrar modal de orden
-function closeOrdenModal() {
-    const modal = document.querySelector('#orden-modal');
-    if (modal) {
-        modal.remove();
-    }
-}
-
-// Función para cerrar cualquier modal
-function closeModal() {
-    const modals = document.querySelectorAll('[style*="position: fixed"]');
-    modals.forEach(modal => modal.remove());
 }
 
 // Mostrar modal para nueva orden
@@ -1366,7 +1313,7 @@ async function showNewOrdenModal() {
                         </div>
                         
                         <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn" onclick="closeModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                            <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
                             <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Orden</button>
                         </div>
                     </form>
