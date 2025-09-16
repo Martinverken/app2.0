@@ -1071,6 +1071,7 @@
             // Crear modal dinámicamente
             const modal = document.createElement('div');
             modal.id = 'proveedor-modal';
+            modal.className = 'modal-simple';
 
             modal.innerHTML = `
                 <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
@@ -1090,7 +1091,7 @@
                                 <input type="text" name="contacto" class="form-input">
                             </div>
                             <div style="display: flex; gap: 1rem;">
-                                <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                                <button type="button" class="btn" onclick='cerrarModal()' style="flex: 1; background: #718096;">Cancelar</button>
                                 <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Proveedor</button>
                             </div>
                         </form>
@@ -1272,6 +1273,7 @@ async function showNewOrdenModal() {
         
         const modal = document.createElement('div');
         modal.id = 'proveedor-modal';
+        modal.className = 'modal-simple';
         
         modal.innerHTML = `
             <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
@@ -1313,7 +1315,7 @@ async function showNewOrdenModal() {
                         </div>
                         
                         <div style="display: flex; gap: 1rem;">
-                            <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                            <button type="button" class="btn" onclick='cerrarModal()' style="flex: 1; background: #718096;">Cancelar</button>
                             <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Orden</button>
                         </div>
                     </form>
