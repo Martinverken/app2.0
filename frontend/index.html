@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión Financiera</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1a202c;
+            line-height: 1.6;
+        }
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .sidebar-header {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid #4a5568;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-header p {
+            font-size: 0.875rem;
+            color: #a0aec0;
+        }
+
+        .nav-menu {
+            padding: 1rem 0;
+        }
+
+        .nav-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .nav-section-title {
+            padding: 0.5rem 1.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #a0aec0;
+            letter-spacing: 0.05em;
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .nav-item:hover {
+            background-color: #4a5568;
+            border-left-color: #63b3ed;
+        }
+
+        .nav-item.active {
+            background-color: #3182ce;
+            border-left-color: #63b3ed;
+        }
+
+        .nav-item-icon {
+            font-size: 1.25rem;
+            width: 1.5rem;
+            text-align: center;
+        }
+
+        .nav-sub-item {
+            padding: 0.5rem 1.5rem 0.5rem 3.5rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #cbd5e0;
+        }
+
+        .nav-sub-item:hover {
+            background-color: #4a5568;
+            color: white;
+        }
+
+        .nav-sub-item.active {
+            background-color: #2b6cb0;
+            color: white;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 2rem;
+        }
+
+        .page-header {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon {
+            font-size: 1.5rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-right: 1rem;
+        }
+
+        .stat-icon.blue { background: #ebf8ff; color: #3182ce; }
+        .stat-icon.green { background: #f0fff4; color: #38a169; }
+        .stat-icon.yellow { background: #fffbeb; color: #d69e2e; }
+        .stat-icon.red { background: #fed7d7; color: #e53e3e; }
+        .stat-icon.purple { background: #faf5ff; color: #805ad5; }
+
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .content-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: #3182ce;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2c5282;
+        }
+
+        .btn-success {
+            background: #38a169;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #2f855a;
+        }
+
+        .btn-warning {
+            background: #d69e2e;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #b7791f;
+        }
+
+        .btn-danger {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c53030;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .table th,
+        .table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .table th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #feb2b2;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-pendiente {
+            background: #fef5e7;
+            color: #744210;
+        }
+
+        .status-pagada {
+            background: #f0fff4;
+            color: #22543d;
+        }
+
+        .status-vencida {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>💰 SGF</h1>
+                <p>Sistema de Gestión Financiera</p>
+            </div>
+            
+            <nav class="nav-menu">
+                <div class="nav-section">
+                    <div class="nav-section-title">Finanzas</div>
+                    <div class="nav-item" onclick="showSection('finanzas-overview')">
+                        <span class="nav-item-icon">📊</span>
+                        <span>Resumen Financiero</span>
+                    </div>
+                    <div class="nav-item" onclick="toggleSubmenu('facturas-submenu')">
+                        <span class="nav-item-icon">🧾</span>
+                        <span>Facturas</span>
+                    </div>
+                    <div id="facturas-submenu" class="hidden">
+                        <div class="nav-sub-item" onclick="showSection('facturas-pendientes')">Pendientes de Pago</div>
+                        <div class="nav-sub-item" onclick="showSection('facturas-pagadas')">Pagadas</div>
+                        <div class="nav-sub-item" onclick="showSection('registro-pagos')">Registro de Pagos</div>
+                    </div>
+                    <div class="nav-item" onclick="showSection('costos-fijos')">
+                        <span class="nav-item-icon">🔄</span>
+                        <span>Costos Fijos</span>
+                    </div>
+                    <div class="nav-item" onclick="showSection('otros-costos')">
+                        <span class="nav-item-icon">💸</span>
+                        <span>Otros Costos</span>
+                    </div>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Operaciones</div>
+                    <div class="nav-item" onclick="showSection('ordenes-compra')">
+                        <span class="nav-item-icon">🛒</span>
+                        <span>Órdenes de Compra</span>
+                    </div>
+                    <div class="nav-item" onclick="showSection('embarques')">
+                        <span class="nav-item-icon">🚢</span>
+                        <span>Embarques</span>
+                    </div>
+                    <div class="nav-item" onclick="showSection('proveedores')">
+                        <span class="nav-item-icon">🏢</span>
+                        <span>Proveedores</span>
+                    </div>
+                </div>
+                
+                <div class="nav-section">
+                    <div class="nav-section-title">Reportes</div>
+                    <div class="nav-item" onclick="showSection('flujo-caja')">
+                        <span class="nav-item-icon">📈</span>
+                        <span>Flujo de Caja</span>
+                    </div>
+                </div>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Resumen Financiero -->
+            <div id="finanzas-overview" class="page-section">
+                <div class="page-header">
+                    <h1 class="page-title">📊 Resumen Financiero</h1>
+                    <p class="page-subtitle">Vista general del estado financiero de la empresa</p>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon blue">🧾</div>
+                        </div>
+                        <div class="stat-value" id="total-facturas-pendientes">0</div>
+                        <div class="stat-label">Facturas Pendientes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon green">✅</div>
+                        </div>
+                        <div class="stat-value" id="total-facturas-pagadas">0</div>
+                        <div class="stat-label">Facturas Pagadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon yellow">🔄</div>
+                        </div>
+                        <div class="stat-value" id="total-costos-fijos">$0</div>
+                        <div class="stat-label">Costos Fijos Mensuales</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon purple">📈</div>
+                        </div>
+                        <div class="stat-value" id="flujo-neto-mes">$0</div>
+                        <div class="stat-label">Flujo Neto del Mes</div>
+                    </div>
+                </div>
+
+                <div class="content-section">
+                    <h2 class="section-title">
+                        <span>📋</span>
+                        Actividad Reciente
+                    </h2>
+                    <div id="actividad-reciente">
+                        <p style="color: #718096;">Cargando actividad reciente...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Facturas Pendientes -->
+            <div id="facturas-pendientes" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">🧾 Facturas Pendientes de Pago</h1>
+                    <p class="page-subtitle">Gestión de facturas por pagar</p>
+                </div>
+                
+                <div class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="section-title">Lista de Facturas Pendientes</h2>
+                        <button class="btn btn-primary" onclick="showNewFacturaModal()">
+                            <span>➕</span> Nueva Factura
+                        </button>
+                    </div>
+                    <div id="facturas-pendientes-list">
+                        <p style="color: #718096;">No hay facturas pendientes</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Facturas Pagadas -->
+            <div id="facturas-pagadas" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">✅ Facturas Pagadas</h1>
+                    <p class="page-subtitle">Historial de facturas pagadas</p>
+                </div>
+                
+                <div class="content-section">
+                    <h2 class="section-title">Historial de Pagos</h2>
+                    <div id="facturas-pagadas-list">
+                        <p style="color: #718096;">No hay facturas pagadas</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Registro de Pagos -->
+            <div id="registro-pagos" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">💳 Registro de Pagos</h1>
+                    <p class="page-subtitle">Registrar pagos de facturas</p>
+                </div>
+                
+                <div class="content-section">
+                    <h2 class="section-title">Registrar Nuevo Pago</h2>
+                    <form id="pago-form">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Factura</label>
+                                <select class="form-input" id="factura-select" required>
+                                    <option value="">Seleccionar factura...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Monto del Pago</label>
+                                <input type="number" class="form-input" step="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Fecha de Pago</label>
+                                <input type="date" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Usuario que Paga</label>
+                                <input type="text" class="form-input" placeholder="Nombre del usuario" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success">Registrar Pago</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Costos Fijos -->
+            <div id="costos-fijos" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">🔄 Costos Fijos</h1>
+                    <p class="page-subtitle">Gestión de gastos recurrentes</p>
+                </div>
+                
+                <div class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="section-title">Costos Fijos Recurrentes</h2>
+                        <button class="btn btn-primary" onclick="showNewCostoFijoModal()">
+                            <span>➕</span> Nuevo Costo Fijo
+                        </button>
+                    </div>
+                    <div id="costos-fijos-list">
+                        <p style="color: #718096;">No hay costos fijos registrados</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Otros Costos -->
+            <div id="otros-costos" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">💸 Otros Costos</h1>
+                    <p class="page-subtitle">Gastos extraordinarios e imprevistos</p>
+                </div>
+                
+                <div class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="section-title">Gastos Extraordinarios</h2>
+                        <button class="btn btn-primary" onclick="showNewOtroCostoModal()">
+                            <span>➕</span> Registrar Gasto
+                        </button>
+                    </div>
+                    <div id="otros-costos-list">
+                        <p style="color: #718096;">No hay otros costos registrados</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Órdenes de Compra -->
+            <div id="ordenes-compra" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">🛒 Órdenes de Compra</h1>
+                    <p class="page-subtitle">Gestión de órdenes de compra y anticipos</p>
+                </div>
+                
+                <div class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="section-title">Lista de Órdenes</h2>
+                        <button class="btn btn-primary" onclick="showNewOrdenModal()">
+                            <span>➕</span> Nueva Orden
+                        </button>
+                    </div>
+                    <div id="ordenes-compra-list">
+                        <p style="color: #718096;">No hay órdenes de compra</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Embarques -->
+            <div id="embarques" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">🚢 Embarques</h1>
+                    <p class="page-subtitle">Gestión de embarques y facturas asociadas</p>
+                </div>
+                
+                <div class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="section-title">Lista de Embarques</h2>
+                        <button class="btn btn-primary" onclick="showNewEmbarqueModal()">
+                            <span>➕</span> Nuevo Embarque
+                        </button>
+                    </div>
+                    <div id="embarques-list">
+                        <p style="color: #718096;">No hay embarques registrados</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proveedores -->
+            <div id="proveedores" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">🏢 Proveedores</h1>
+                    <p class="page-subtitle">Gestión de proveedores y contactos</p>
+                </div>
+                
+                <div class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="section-title">Lista de Proveedores</h2>
+                        <button class="btn btn-primary" onclick="showNewProveedorModal()">
+                            <span>➕</span> Nuevo Proveedor
+                        </button>
+                    </div>
+                    <div id="proveedores-list">
+                        <p style="color: #718096;">Cargando proveedores...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flujo de Caja -->
+            <div id="flujo-caja" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">📈 Flujo de Caja</h1>
+                    <p class="page-subtitle">Análisis de ingresos y egresos</p>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon green">💰</div>
+                        </div>
+                        <div class="stat-value">$0</div>
+                        <div class="stat-label">Ingresos del Mes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon red">💸</div>
+                        </div>
+                        <div class="stat-value">$0</div>
+                        <div class="stat-label">Egresos del Mes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon blue">📊</div>
+                        </div>
+                        <div class="stat-value">$0</div>
+                        <div class="stat-label">Flujo Neto</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon yellow">⚡</div>
+                        </div>
+                        <div class="stat-value">$0</div>
+                        <div class="stat-label">Proyección</div>
+                    </div>
+                </div>
+
+                <div class="content-section">
+                    <h2 class="section-title">Flujo de Caja Mensual</h2>
+                    <div id="flujo-caja-chart">
+                        <p style="color: #718096;">Gráfico de flujo de caja próximamente...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://7fe649dd9a5c.ngrok-free.app';
+
+        // Navegación
+        function showSection(sectionId) {
+            // Ocultar todas las secciones
+            document.querySelectorAll('.page-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            
+            // Mostrar la sección seleccionada
+            document.getElementById(sectionId).classList.remove('hidden');
+            
+            // Actualizar navegación activa
+            document.querySelectorAll('.nav-item, .nav-sub-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Cargar datos específicos de la sección
+            loadSectionData(sectionId);
+        }
+
+        function toggleSubmenu(submenuId) {
+            const submenu = document.getElementById(submenuId);
+            submenu.classList.toggle('hidden');
+        }
+
+        // Cargar datos de proveedores
+        async function loadProveedores() {
+            try {
+                const response = await fetch(`${API_BASE}/api/proveedores`);
+                const data = await response.json();
+                
+                const container = document.getElementById('proveedores-list');
+                
+                if (data.success && data.data.length > 0) {
+                    container.innerHTML = `
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>País</th>
+                                    <th>Contacto</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.data.map(proveedor => `
+                                    <tr>
+                                        <td><strong>${proveedor.nombre}</strong></td>
+                                        <td>${proveedor.pais_origen}</td>
+                                        <td>${proveedor.contacto || 'No especificado'}</td>
+                                        <td>
+                                            <button class="btn btn-primary" onclick="editProveedor('${proveedor.id}')">Editar</button>
+                                            <button class="btn btn-danger" onclick="deleteProveedor('${proveedor.id}')">Eliminar</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: #718096;">No hay proveedores registrados</p>';
+                }
+            } catch (error) {
+                console.error('Error cargando proveedores:', error);
+            }
+        }
+
+        // Cargar estadísticas
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/stats`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Actualizar estadísticas básicas
+                    // Por ahora solo tenemos proveedores funcionando
+                }
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+            }
+        }
+
+        // Cargar datos específicos de cada sección
+        function loadSectionData(sectionId) {
+            switch(sectionId) {
+                case 'finanzas-overview':
+                    loadStats();
+                    loadActividadReciente();
+                    break;
+                case 'proveedores':
+                    loadProveedores();
+                    break;
+                case 'facturas-pendientes':
+                    loadFacturasPendientes();
+                    break;
+                case 'facturas-pagadas':
+                    loadFacturasPagadas();
+                    break;
+                case 'costos-fijos':
+                    loadCostosFijos();
+                    break;
+                case 'otros-costos':
+                    loadOtrosCostos();
+                    break;
+                case 'ordenes-compra':
+                    loadOrdenesCompra();
+                    break;
+                case 'embarques':
+                    loadEmbarques();
+                    break;
+                case 'flujo-caja':
+                    loadFlujoCaja();
+                    break;
+            }
+        }
+
+        // Cargar actividad reciente
+        async function loadActividadReciente() {
+            const container = document.getElementById('actividad-reciente');
+            container.innerHTML = `
+                <div style="space-y: 1rem;">
+                    <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid #38a169;">
+                        <div style="font-weight: 600; color: #2d3748;">✅ Pago registrado</div>
+                        <div style="color: #718096; font-size: 0.875rem;">Factura FACT-001 - $2,500 USD - Hace 2 horas</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid #3182ce;">
+                        <div style="font-weight: 600; color: #2d3748;">🛒 Nueva orden de compra</div>
+                        <div style="color: #718096; font-size: 0.875rem;">OC-001 - Proveedor China A - Hace 4 horas</div>
+                    </div>
+                    <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid #d69e2e;">
+                        <div style="font-weight: 600; color: #2d3748;">🚢 Embarque actualizado</div>
+                        <div style="color: #718096; font-size: 0.875rem;">EMB-001 - Estado: En tránsito - Hace 6 horas</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Cargar facturas pendientes
+        async function loadFacturasPendientes() {
+            const container = document.getElementById('facturas-pendientes-list');
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Proveedor</th>
+                            <th>Monto Total</th>
+                            <th>Anticipo Aplicado</th>
+                            <th>Saldo Pendiente</th>
+                            <th>Vencimiento</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: #718096; padding: 2rem;">
+                                No hay facturas pendientes
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Cargar facturas pagadas
+        async function loadFacturasPagadas() {
+            const container = document.getElementById('facturas-pagadas-list');
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Proveedor</th>
+                            <th>Monto Total</th>
+                            <th>Fecha Pago</th>
+                            <th>Usuario</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #718096; padding: 2rem;">
+                                No hay facturas pagadas
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Cargar costos fijos
+        async function loadCostosFijos() {
+            const container = document.getElementById('costos-fijos-list');
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Monto</th>
+                            <th>Frecuencia</th>
+                            <th>Próximo Pago</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #718096; padding: 2rem;">
+                                No hay costos fijos registrados
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Cargar otros costos
+        async function loadOtrosCostos() {
+            const container = document.getElementById('otros-costos-list');
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Concepto</th>
+                            <th>Monto</th>
+                            <th>Categoría</th>
+                            <th>Usuario</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #718096; padding: 2rem;">
+                                No hay otros costos registrados
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Cargar órdenes de compra
+        async function loadOrdenesCompra() {
+            const container = document.getElementById('ordenes-compra-list');
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Fecha</th>
+                            <th>Marca</th>
+                            <th>Proveedor</th>
+                            <th>Valor USD</th>
+                            <th>Anticipo</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: #718096; padding: 2rem;">
+                                No hay órdenes de compra
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Cargar embarques
+        async function loadEmbarques() {
+            const container = document.getElementById('embarques-list');
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Fecha Embarque</th>
+                            <th>Fecha Llegada</th>
+                            <th>Total</th>
+                            <th>Facturas</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: #718096; padding: 2rem;">
+                                No hay embarques registrados
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Cargar flujo de caja
+        async function loadFlujoCaja() {
+            // Por ahora solo mostramos datos de ejemplo
+            console.log('Cargando flujo de caja...');
+        }
+
+        // Modales y formularios
+        function showNewProveedorModal() {
+            // Crear modal dinámicamente
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+                    <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 500px;">
+                        <h3 style="margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 600;">Nuevo Proveedor</h3>
+                        <form id="nuevo-proveedor-form">
+                            <div style="margin-bottom: 1rem;">
+                                <label class="form-label">Nombre *</label>
+                                <input type="text" name="nombre" class="form-input" required>
+                            </div>
+                            <div style="margin-bottom: 1rem;">
+                                <label class="form-label">País de Origen *</label>
+                                <input type="text" name="pais_origen" class="form-input" required>
+                            </div>
+                            <div style="margin-bottom: 1.5rem;">
+                                <label class="form-label">Contacto</label>
+                                <input type="text" name="contacto" class="form-input">
+                            </div>
+                            <div style="display: flex; gap: 1rem;">
+                                <button type="button" class="btn" onclick="this.closest('[style*=\"position: fixed\"]').remove()" style="flex: 1; background: #718096;">Cancelar</button>
+                                <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Proveedor</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Manejar envío del formulario
+            document.getElementById('nuevo-proveedor-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const data = {
+                    nombre: formData.get('nombre'),
+                    pais_origen: formData.get('pais_origen'),
+                    contacto: formData.get('contacto') || null
+                };
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/proveedores`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        modal.remove();
+                        loadProveedores(); // Recargar la lista
+                        showAlert('Proveedor creado exitosamente', 'success');
+                    } else {
+                        showAlert('Error: ' + result.detail, 'error');
+                    }
+                } catch (error) {
+                    showAlert('Error de conexión', 'error');
+                }
+            });
+        }
+
+        // Función para mostrar alertas
+        function showAlert(message, type) {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alert.style.position = 'fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '3000';
+            alert.style.minWidth = '300px';
+            
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // Funciones placeholder para otros modales
+        function showNewFacturaModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewCostoFijoModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewOtroCostoModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewOrdenModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewEmbarqueModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function editProveedor(id) {
+            showAlert('Funcionalidad de edición en desarrollo', 'warning');
+        }
+
+        function deleteProveedor(id) {
+            if (confirm('¿Estás seguro de que quieres eliminar este proveedor?')) {
+                // Implementar eliminación
+                showAlert('Funcionalidad de eliminación en desarrollo', 'warning');
+            }
+        }
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mostrar la sección de resumen financiero por defecto
+            showSection('finanzas-overview');
+        });
+    </script>
+</body>
+</html>
