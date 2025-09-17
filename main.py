@@ -714,6 +714,136 @@ async def create_otro_costo(costo: OtroCostoCreate):
         raise HTTPException(status_code=500, detail=f"Error al crear otro costo: {str(e)}")
 
 # =============================================
+# MODELOS PARA FACTURAS
+# =============================================
+
+class FacturaCreate(BaseModel):
+    numero_factura: str
+    embarque_id: str
+    orden_compra_id: Optional[str] = None  # Opcional
+    monto_base: float
+    moneda: str  # USD o CLP
+    iva: Optional[float] = 0  # Solo para CLP
+    monto_total: float
+    fecha_vencimiento: date
+    tipo_factura: str  # 'producto' o 'servicio'
+    concepto: Optional[str] = None
+    proveedor_servicio: Optional[str] = None
+
+# =============================================
+# ENDPOINTS DE FACTURAS
+# =============================================
+
+@app.get("/api/facturas")
+async def get_facturas():
+    """Obtener todas las facturas con información relacionada"""
+    try:
+        result = supabase.table('facturas').select("""
+            *,
+            embarques!facturas_embarque_id_fkey (
+                id,
+                numero_embarque
+            ),
+            ordenes_compra!facturas_orden_compra_id_fkey (
+                id,
+                numero_orden,
+                marca
+            )
+        """).order('created_at', desc=True).execute()
+        
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener facturas: {str(e)}")
+
+@app.post("/api/facturas")
+async def create_factura(factura: FacturaCreate):
+    """Crear una nueva factura"""
+    try:
+        # Validaciones
+        if not factura.numero_factura.strip():
+            raise HTTPException(status_code=400, detail="El número de factura es requerido")
+        
+        if not factura.embarque_id:
+            raise HTTPException(status_code=400, detail="El embarque es requerido")
+            
+        if factura.moneda not in ["USD", "CLP"]:
+            raise HTTPException(status_code=400, detail="La moneda debe ser USD o CLP")
+            
+        if factura.tipo_factura not in ["producto", "servicio"]:
+            raise HTTPException(status_code=400, detail="El tipo debe ser 'producto' o 'servicio'")
+        
+        # Verificar que el embarque existe
+        embarque_result = supabase.table('embarques').select('id').eq('id', factura.embarque_id).execute()
+        if not embarque_result.data:
+            raise HTTPException(status_code=400, detail="El embarque especificado no existe")
+        
+        # Si tiene orden de compra, verificar que existe
+        if factura.orden_compra_id:
+            orden_result = supabase.table('ordenes_compra').select('id').eq('id', factura.orden_compra_id).execute()
+            if not orden_result.data:
+                raise HTTPException(status_code=400, detail="La orden de compra especificada no existe")
+        
+        # Verificar que el número no existe
+        factura_existente = supabase.table('facturas').select('id').eq('numero_factura', factura.numero_factura).execute()
+        if factura_existente.data:
+            raise HTTPException(status_code=400, detail="Ya existe una factura con ese número")
+        
+        # Crear factura
+        factura_data = {
+            "numero_factura": factura.numero_factura.strip(),
+            "embarque_id": factura.embarque_id,
+            "orden_compra_id": factura.orden_compra_id,
+            "monto_base": factura.monto_base,
+            "moneda": factura.moneda,
+            "iva": factura.iva,
+            "monto_total": factura.monto_total,
+            "fecha_vencimiento": factura.fecha_vencimiento.isoformat(),
+            "tipo_factura": factura.tipo_factura,
+            "concepto": factura.concepto.strip() if factura.concepto else None,
+            "proveedor_servicio": factura.proveedor_servicio.strip() if factura.proveedor_servicio else None,
+            "estado": "pendiente",
+            "saldo_pendiente": factura.monto_total
+        }
+        
+        result = supabase.table('facturas').insert(factura_data).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Factura '{factura.numero_factura}' creada exitosamente",
+            "data": result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear factura: {str(e)}")
+
+@app.delete("/api/facturas/{factura_id}")
+async def delete_factura(factura_id: str):
+    """Eliminar una factura"""
+    try:
+        # Verificar si tiene pagos registrados
+        # (cuando implementemos pagos, descomentar esto)
+        # pagos_result = supabase.table('pagos').select("id").eq('factura_id', factura_id).limit(1).execute()
+        # if pagos_result.data:
+        #     raise HTTPException(status_code=400, detail="❌ No se puede eliminar: la factura tiene pagos registrados")
+        
+        # Eliminar la factura
+        result = supabase.table('facturas').delete().eq('id', factura_id).execute()
+        
+        return {
+            "success": True,
+            "message": "✅ Factura eliminada exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar factura: {str(e)}")
+
+# =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
 # =============================================
 

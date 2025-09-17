@@ -1808,6 +1808,381 @@ async function showNewOtroCostoModal() {
     `;
     document.body.appendChild(modal);
 
+
+// =============================================
+// CARGAR FACTURAS
+// =============================================
+
+async function loadFacturasPendientes() {
+    const container = document.getElementById('facturas-pendientes-list');
+    container.innerHTML = '<div class="loading">Cargando facturas...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/facturas`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
+            const facturasPendientes = data.data.filter(f => f.estado === 'pendiente');
+            
+            if (facturasPendientes.length > 0) {
+                container.innerHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Número</th>
+                                <th>Tipo</th>
+                                <th>Embarque</th>
+                                <th>Orden Compra</th>
+                                <th>Monto</th>
+                                <th>Vencimiento</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${facturasPendientes.map(factura => `
+                                <tr>
+                                    <td><strong>${factura.numero_factura}</strong></td>
+                                    <td>
+                                        <span class="status-badge ${factura.tipo_factura === 'producto' ? 'status-pagada' : 'status-pendiente'}">
+                                            ${factura.tipo_factura}
+                                        </span>
+                                    </td>
+                                    <td>${factura.embarques ? factura.embarques.numero_embarque : 'N/A'}</td>
+                                    <td>${factura.ordenes_compra ? factura.ordenes_compra.numero_orden : 'Solo servicio'}</td>
+                                    <td>
+                                        ${formatNumber(factura.monto_total)} 
+                                        <span class="status-badge ${factura.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
+                                            ${factura.moneda}
+                                        </span>
+                                    </td>
+                                    <td>${new Date(factura.fecha_vencimiento).toLocaleDateString()}</td>
+                                    <td>
+                                        <span class="status-badge status-${factura.estado}">
+                                            ${factura.estado}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-success" onclick="pagarFactura('${factura.id}')" style="margin-right: 0.5rem;">💳</button>
+                                        <button class="btn btn-danger" onclick="deleteFactura('${factura.id}', '${factura.numero_factura}')">🗑️</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas pendientes</p>';
+            }
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas registradas</p>';
+        }
+    } catch (error) {
+        console.error('Error cargando facturas:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar facturas</p>';
+    }
+}
+
+async function loadFacturasPagadas() {
+    const container = document.getElementById('facturas-pagadas-list');
+    container.innerHTML = '<div class="loading">Cargando facturas...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/facturas`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
+            const facturasPagadas = data.data.filter(f => f.estado === 'pagada');
+            
+            if (facturasPagadas.length > 0) {
+                container.innerHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Número</th>
+                                <th>Tipo</th>
+                                <th>Embarque</th>
+                                <th>Monto</th>
+                                <th>Fecha Pago</th>
+                                <th>Usuario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${facturasPagadas.map(factura => `
+                                <tr>
+                                    <td><strong>${factura.numero_factura}</strong></td>
+                                    <td>
+                                        <span class="status-badge ${factura.tipo_factura === 'producto' ? 'status-pagada' : 'status-pendiente'}">
+                                            ${factura.tipo_factura}
+                                        </span>
+                                    </td>
+                                    <td>${factura.embarques ? factura.embarques.numero_embarque : 'N/A'}</td>
+                                    <td>
+                                        ${formatNumber(factura.monto_total)} 
+                                        <span class="status-badge ${factura.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
+                                            ${factura.moneda}
+                                        </span>
+                                    </td>
+                                    <td>${factura.fecha_pago ? new Date(factura.fecha_pago).toLocaleDateString() : '-'}</td>
+                                    <td>${factura.usuario_pago || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas pagadas</p>';
+            }
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas registradas</p>';
+        }
+    } catch (error) {
+        console.error('Error cargando facturas:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar facturas</p>';
+    }
+}
+
+// =============================================
+// MODAL NUEVA FACTURA
+// =============================================
+
+async function showNewFacturaModal() {
+    try {
+        // Cargar embarques y órdenes para los selects
+        const [embarquesRes, ordenesRes] = await Promise.all([
+            fetch(`${API_BASE}/api/embarques`),
+            fetch(`${API_BASE}/api/ordenes`)
+        ]);
+        
+        const embarquesData = await embarquesRes.json();
+        const ordenesData = await ordenesRes.json();
+        
+        if (!embarquesData.success || embarquesData.data.length === 0) {
+            showAlert('Primero debes crear embarques', 'error');
+            return;
+        }
+        
+        const embarquesOptions = embarquesData.data.map(e => 
+            `<option value="${e.id}">${e.numero_embarque}</option>`
+        ).join('');
+        
+        const ordenesOptions = ordenesData.success ? ordenesData.data.map(o => 
+            `<option value="${o.id}">${o.numero_orden} - ${o.marca}</option>`
+        ).join('') : '';
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-simple';
+        modal.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+                <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 700px; max-height: 90vh; overflow-y: auto;">
+                    <h3 style="margin-bottom: 1.5rem;">Nueva Factura</h3>
+                    <form id="nueva-factura-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label class="form-label">Número Factura *</label>
+                                <input type="text" name="numero_factura" class="form-input" required>
+                            </div>
+                            <div>
+                                <label class="form-label">Tipo de Factura *</label>
+                                <select name="tipo_factura" class="form-input" required onchange="toggleFacturaFields(this.value)">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="producto">Producto (de proveedor)</option>
+                                    <option value="servicio">Servicio (flete, etc.)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label class="form-label">Embarque *</label>
+                                <select name="embarque_id" class="form-input" required>
+                                    <option value="">Seleccionar embarque...</option>
+                                    ${embarquesOptions}
+                                </select>
+                            </div>
+                            <div id="orden-compra-field">
+                                <label class="form-label" id="orden-label">Orden de Compra</label>
+                                <select name="orden_compra_id" class="form-input">
+                                    <option value="">Solo servicio (opcional)</option>
+                                    ${ordenesOptions}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label class="form-label">Monto Base *</label>
+                                <input type="number" name="monto_base" class="form-input" step="0.01" required onchange="calcularTotal()">
+                            </div>
+                            <div>
+                                <label class="form-label">Moneda *</label>
+                                <select name="moneda" class="form-input" required onchange="toggleIVA(this.value)">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="USD">USD</option>
+                                    <option value="CLP">CLP</option>
+                                </select>
+                            </div>
+                            <div id="iva-field" style="display: none;">
+                                <label class="form-label">IVA (19%)</label>
+                                <input type="number" name="iva" class="form-input" step="0.01" readonly>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div>
+                                <label class="form-label">Monto Total *</label>
+                                <input type="number" name="monto_total" class="form-input" step="0.01" required readonly>
+                            </div>
+                            <div>
+                                <label class="form-label">Fecha Vencimiento *</label>
+                                <input type="date" name="fecha_vencimiento" class="form-input" required>
+                            </div>
+                        </div>
+                        
+                        <div id="servicio-fields" style="display: none; margin-bottom: 1rem;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div>
+                                    <label class="form-label">Concepto</label>
+                                    <input type="text" name="concepto" class="form-input" placeholder="Flete marítimo, seguro, etc.">
+                                </div>
+                                <div>
+                                    <label class="form-label">Proveedor Servicio</label>
+                                    <input type="text" name="proveedor_servicio" class="form-input" placeholder="Naviera, agente, etc.">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                            <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Factura</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Manejar envío
+        document.getElementById('nueva-factura-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = {
+                numero_factura: formData.get('numero_factura'),
+                tipo_factura: formData.get('tipo_factura'),
+                embarque_id: formData.get('embarque_id'),
+                orden_compra_id: formData.get('orden_compra_id') || null,
+                monto_base: parseFloat(formData.get('monto_base')),
+                moneda: formData.get('moneda'),
+                iva: parseFloat(formData.get('iva')) || 0,
+                monto_total: parseFloat(formData.get('monto_total')),
+                fecha_vencimiento: formData.get('fecha_vencimiento'),
+                concepto: formData.get('concepto') || null,
+                proveedor_servicio: formData.get('proveedor_servicio') || null
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/facturas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    modal.remove();
+                    loadFacturasPendientes();
+                } else {
+                    showAlert('Error: ' + result.detail, 'error');
+                }
+            } catch (error) {
+                showAlert('Error de conexión', 'error');
+            }
+        });
+        
+    } catch (error) {
+        showAlert('Error al cargar datos', 'error');
+    }
+}
+
+// =============================================
+// FUNCIONES AUXILIARES DEL MODAL
+// =============================================
+
+function toggleFacturaFields(tipo) {
+    const ordenSelect = document.querySelector('select[name="orden_compra_id"]');
+    const ordenLabel = document.getElementById('orden-label');
+    const servicioFields = document.getElementById('servicio-fields');
+    
+    if (tipo === 'producto') {
+        ordenSelect.required = true;
+        ordenLabel.textContent = 'Orden de Compra *';
+        servicioFields.style.display = 'none';
+    } else if (tipo === 'servicio') {
+        ordenSelect.required = false;
+        ordenLabel.textContent = 'Orden de Compra (opcional)';
+        servicioFields.style.display = 'block';
+    }
+}
+
+function toggleIVA(moneda) {
+    const ivaField = document.getElementById('iva-field');
+    const ivaInput = document.querySelector('input[name="iva"]');
+    
+    if (moneda === 'CLP') {
+        ivaField.style.display = 'block';
+    } else {
+        ivaField.style.display = 'none';
+        ivaInput.value = '';
+    }
+    calcularTotal();
+}
+
+function calcularTotal() {
+    const montoBase = parseFloat(document.querySelector('input[name="monto_base"]').value) || 0;
+    const moneda = document.querySelector('select[name="moneda"]').value;
+    const ivaInput = document.querySelector('input[name="iva"]');
+    const totalInput = document.querySelector('input[name="monto_total"]');
+    
+    let iva = 0;
+    if (moneda === 'CLP' && montoBase > 0) {
+        iva = montoBase * 0.19;
+        ivaInput.value = iva.toFixed(2);
+    }
+    
+    const total = montoBase + iva;
+    totalInput.value = total.toFixed(2);
+}
+
+async function deleteFactura(facturaId, numeroFactura) {
+    if (!confirm(`¿Estás seguro de eliminar la factura "${numeroFactura}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/facturas/${facturaId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert(result.message, 'success');
+            loadFacturasPendientes();
+        } else {
+            showAlert('Error: ' + result.detail, 'error');
+        }
+    } catch (error) {
+        showAlert('Error de conexión', 'error');
+    }
+}
+
+function pagarFactura(facturaId) {
+    showAlert('Funcionalidad de pago en desarrollo', 'warning');
+}
+
     // Manejar envío del formulario
     document.getElementById('nuevo-otro-costo-form').addEventListener('submit', async (e) => {
         e.preventDefault();
