@@ -1053,7 +1053,26 @@
                 }
                 
                 return vencimientos.map(v => {
-                    const fecha = new Date(v.fecha_vencimiento).toLocaleDateString();
+                    // Arreglar el formato de fecha
+                    let fecha = 'Fecha inválida';
+                    try {
+                        if (v.fecha_vencimiento) {
+                            // Probar diferentes formatos
+                            const fechaObj = new Date(v.fecha_vencimiento);
+                            if (!isNaN(fechaObj.getTime())) {
+                                fecha = fechaObj.toLocaleDateString('es-CL');
+                            } else {
+                                // Si falla, probar parseando manualmente
+                                fecha = v.fecha_vencimiento.split('T')[0]; // Solo la parte de fecha
+                                const [año, mes, dia] = fecha.split('-');
+                                fecha = `${dia}/${mes}/${año}`;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error procesando fecha:', v.fecha_vencimiento, e);
+                        fecha = v.fecha_vencimiento || 'Sin fecha';
+                    }
+                    
                     const monto = formatNumber(v.monto_cuota);
                     const estadoClass = v.estado === 'pagada' ? 'status-pagada' : 
                                     v.estado === 'vencida' ? 'status-vencida' : 'status-pendiente';
