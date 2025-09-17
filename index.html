@@ -1362,6 +1362,63 @@ async function showNewOrdenModal() {
         showAlert('Error al cargar proveedores', 'error');
     }
 }
+
+// Eliminar orden de compra
+async function deleteOrden(id, numeroOrden) {
+    if (!confirm(`¿Estás seguro de eliminar la orden "${numeroOrden}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/ordenes/${id}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert(result.message, 'success');
+            loadOrdenesCompra(); // Recargar lista
+        } else {
+            showAlert('Error: ' + result.detail, 'error');
+        }
+    } catch (error) {
+        showAlert('Error de conexión', 'error');
+    }
+}
+
+// Editar orden de compra (versión simple)
+async function editOrden(id) {
+    try {
+        // Obtener datos de la orden
+        const response = await fetch(`${API_BASE}/api/ordenes/${id}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            showAlert('Error al cargar orden', 'error');
+            return;
+        }
+        
+        const orden = data.data;
+        
+        // Por ahora, mostrar la info y permitir recrear
+        const info = `Orden: ${orden.numero_orden}
+Marca: ${orden.marca}
+Proveedor: ${orden.proveedores ? orden.proveedores.nombre : 'N/A'}
+Valor: $${orden.valor_usd}
+Anticipo: $${orden.monto_anticipo_pagado || 0}
+
+¿Quieres eliminar esta orden y crear una nueva con los datos actualizados?`;
+        
+        if (confirm(info)) {
+            // Por ahora, abrimos el modal de nueva orden con un mensaje
+            showAlert('Elimina la orden actual y crea una nueva con los datos actualizados', 'warning');
+        }
+        
+    } catch (error) {
+        showAlert('Error al cargar datos de la orden', 'error');
+    }
+}
     
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
