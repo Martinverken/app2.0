@@ -495,6 +495,77 @@ async def get_ordenes_resumen():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener resumen: {str(e)}")
 
+
+# =============================================
+# MODELOS PARA EMBARQUES
+# =============================================
+
+class EmbarqueCreate(BaseModel):
+    numero_embarque: str
+    fecha_embarque: Optional[date] = None
+    fecha_llegada_estimada: Optional[date] = None
+    fecha_llegada_real: Optional[date] = None
+
+class EmbarqueUpdate(BaseModel):
+    numero_embarque: Optional[str] = None
+    fecha_embarque: Optional[date] = None
+    fecha_llegada_estimada: Optional[date] = None
+    fecha_llegada_real: Optional[date] = None
+
+# =============================================
+# ENDPOINTS DE EMBARQUES
+# =============================================
+
+@app.get("/api/embarques")
+async def get_embarques():
+    """Obtener todos los embarques"""
+    try:
+        result = supabase.table('embarques').select("*").order('created_at', desc=True).execute()
+        
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data),
+            "message": f"Se encontraron {len(result.data)} embarques"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener embarques: {str(e)}")
+
+@app.post("/api/embarques")
+async def create_embarque(embarque: EmbarqueCreate):
+    """Crear un nuevo embarque"""
+    try:
+        # Validaciones
+        if not embarque.numero_embarque.strip():
+            raise HTTPException(status_code=400, detail="El número de embarque es requerido")
+        
+        # Verificar que el número no existe
+        embarque_existente = supabase.table('embarques').select('id').eq('numero_embarque', embarque.numero_embarque).execute()
+        if embarque_existente.data:
+            raise HTTPException(status_code=400, detail="Ya existe un embarque con ese número")
+        
+        # Preparar datos
+        embarque_data = {
+            "numero_embarque": embarque.numero_embarque.strip(),
+            "fecha_embarque": embarque.fecha_embarque.isoformat() if embarque.fecha_embarque else None,
+            "fecha_llegada_estimada": embarque.fecha_llegada_estimada.isoformat() if embarque.fecha_llegada_estimada else None,
+            "fecha_llegada_real": embarque.fecha_llegada_real.isoformat() if embarque.fecha_llegada_real else None,
+            "estado": "en_transito"
+        }
+        
+        # Crear embarque
+        result = supabase.table('embarques').insert(embarque_data).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Embarque '{embarque.numero_embarque}' creado exitosamente",
+            "data": result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear embarque: {str(e)}")
+
 # =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
 # =============================================

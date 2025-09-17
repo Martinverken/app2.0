@@ -1005,33 +1005,6 @@
             `;
         }
 
-        // Cargar órdenes de compra
-        async function loadOrdenesCompra() {
-            const container = document.getElementById('ordenes-compra-list');
-            container.innerHTML = `
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Número</th>
-                            <th>Fecha</th>
-                            <th>Marca</th>
-                            <th>Proveedor</th>
-                            <th>Valor USD</th>
-                            <th>Anticipo</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="8" style="text-align: center; color: #718096; padding: 2rem;">
-                                No hay órdenes de compra
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            `;
-        }
 
         // Cargar embarques
         async function loadEmbarques() {
@@ -1248,12 +1221,29 @@ function formatNumber(num) {
     }).format(num);
 }
 
-// Función simple para cerrar modales
+        // Función mejorada para cerrar modales
 function cerrarModal() {
-    const modals = document.getElementsByClassName('modal-simple');
-    for (let i = modals.length - 1; i >= 0; i--) {
-        modals[i].remove();
-    }
+    // Buscar todos los tipos de modales posibles
+    const modalSelectors = [
+        '.modal-simple',
+        '#proveedor-modal',
+        '#orden-modal',
+        '[id$="-modal"]',
+        '.modal-overlay'
+    ];
+    
+    modalSelectors.forEach(selector => {
+        const modals = document.querySelectorAll(selector);
+        modals.forEach(modal => modal.remove());
+    });
+    
+    // También buscar modales creados dinámicamente con position: fixed
+    const fixedModals = document.querySelectorAll('[style*="position: fixed"]');
+    fixedModals.forEach(modal => {
+        if (modal.style.zIndex === '2000' || modal.style.zIndex === '3000') {
+            modal.remove();
+        }
+    });
 }
 
 // Mostrar modal para nueva orden
