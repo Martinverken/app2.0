@@ -567,6 +567,81 @@ async def create_embarque(embarque: EmbarqueCreate):
         raise HTTPException(status_code=500, detail=f"Error al crear embarque: {str(e)}")
 
 # =============================================
+# MODELOS PARA COSTOS FIJOS
+# =============================================
+
+class CostoFijoCreate(BaseModel):
+    nombre_costo: str
+    monto: float
+    frecuencia: str  # 'mensual', 'trimestral', 'anual'
+    fecha_inicio: date
+    categoria: Optional[str] = None
+    activo: Optional[bool] = True
+
+class CostoFijoUpdate(BaseModel):
+    nombre_costo: Optional[str] = None
+    monto: Optional[float] = None
+    frecuencia: Optional[str] = None
+    fecha_inicio: Optional[date] = None
+    categoria: Optional[str] = None
+    activo: Optional[bool] = None
+
+# =============================================
+# ENDPOINTS DE COSTOS FIJOS
+# =============================================
+
+@app.get("/api/costos-fijos")
+async def get_costos_fijos():
+    """Obtener todos los costos fijos"""
+    try:
+        result = supabase.table('costos_fijos_recurrentes').select("*").order('created_at', desc=True).execute()
+        
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data),
+            "message": f"Se encontraron {len(result.data)} costos fijos"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener costos fijos: {str(e)}")
+
+@app.post("/api/costos-fijos")
+async def create_costo_fijo(costo: CostoFijoCreate):
+    """Crear un nuevo costo fijo"""
+    try:
+        # Validaciones
+        if not costo.nombre_costo.strip():
+            raise HTTPException(status_code=400, detail="El nombre del costo es requerido")
+        
+        if costo.monto <= 0:
+            raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+            
+        if costo.frecuencia not in ["mensual", "trimestral", "anual"]:
+            raise HTTPException(status_code=400, detail="La frecuencia debe ser mensual, trimestral o anual")
+        
+        # Crear costo fijo
+        costo_data = {
+            "nombre_costo": costo.nombre_costo.strip(),
+            "monto": costo.monto,
+            "frecuencia": costo.frecuencia,
+            "fecha_inicio": costo.fecha_inicio.isoformat(),
+            "categoria": costo.categoria.strip() if costo.categoria else None,
+            "activo": costo.activo if costo.activo is not None else True
+        }
+        
+        result = supabase.table('costos_fijos_recurrentes').insert(costo_data).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Costo fijo '{costo.nombre_costo}' creado exitosamente",
+            "data": result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear costo fijo: {str(e)}")
+
+# =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
 # =============================================
 
