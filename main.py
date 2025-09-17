@@ -765,14 +765,15 @@ async def get_facturas_con_vencimientos():
             )
         """).order('created_at', desc=True).execute()
         
-        # Obtener vencimientos
-        vencimientos_result = supabase.table('facturas_vencimientos').select("*").order('numero_cuota').execute()
+        # Obtener TODOS los vencimientos de una vez
+        vencimientos_result = supabase.table('facturas_vencimientos').select("*").order('factura_id, numero_cuota').execute()
         
         # Combinar datos
         facturas_con_vencimientos = []
         for factura in facturas_result.data:
-            vencimientos = [v for v in vencimientos_result.data if v['factura_id'] == factura['id']]
-            factura['vencimientos'] = vencimientos
+            # Filtrar vencimientos de esta factura específica
+            vencimientos_factura = [v for v in vencimientos_result.data if v['factura_id'] == factura['id']]
+            factura['vencimientos'] = vencimientos_factura
             facturas_con_vencimientos.append(factura)
         
         return {
