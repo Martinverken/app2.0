@@ -1543,6 +1543,10 @@ async function showNewEmbarqueModal() {
 // =============================================
 
 // Cargar costos fijos
+// =============================================
+// FUNCIÓN ACTUALIZADA: loadCostosFijos
+// =============================================
+
 async function loadCostosFijos() {
     const container = document.getElementById('costos-fijos-list');
     container.innerHTML = '<div class="loading">Cargando costos fijos...</div>';
@@ -1558,17 +1562,24 @@ async function loadCostosFijos() {
                         <tr>
                             <th>Concepto</th>
                             <th>Monto</th>
+                            <th>Moneda</th>
                             <th>Frecuencia</th>
                             <th>Categoría</th>
                             <th>Fecha Inicio</th>
                             <th>Estado</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${data.data.map(costo => `
                             <tr>
                                 <td><strong>${costo.nombre_costo}</strong></td>
-                                <td>$${formatNumber(costo.monto)}</td>
+                                <td>${formatNumber(costo.monto)}</td>
+                                <td>
+                                    <span class="status-badge ${costo.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
+                                        ${costo.moneda || 'CLP'}
+                                    </span>
+                                </td>
                                 <td>
                                     <span class="status-badge status-${costo.frecuencia}">
                                         ${costo.frecuencia}
@@ -1580,6 +1591,10 @@ async function loadCostosFijos() {
                                     <span class="status-badge ${costo.activo ? 'status-pagada' : 'status-pendiente'}">
                                         ${costo.activo ? 'Activo' : 'Inactivo'}
                                     </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="editCostoFijo('${costo.id}')" style="margin-right: 0.5rem;">✏️</button>
+                                    <button class="btn btn-danger" onclick="deleteCostoFijo('${costo.id}', '${costo.nombre_costo}')">🗑️</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -1695,7 +1710,6 @@ async function showNewCostoFijoModal() {
 // FUNCIONES DE OTROS COSTOS
 // =============================================
 
-// Cargar otros costos
 async function loadOtrosCostos() {
     const container = document.getElementById('otros-costos-list');
     container.innerHTML = '<div class="loading">Cargando otros costos...</div>';
@@ -1712,7 +1726,9 @@ async function loadOtrosCostos() {
                             <th>Fecha</th>
                             <th>Concepto</th>
                             <th>Monto</th>
+                            <th>Moneda</th>
                             <th>Notas</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1720,8 +1736,17 @@ async function loadOtrosCostos() {
                             <tr>
                                 <td>${new Date(costo.fecha).toLocaleDateString()}</td>
                                 <td><strong>${costo.concepto}</strong></td>
-                                <td>$${formatNumber(costo.monto)}</td>
+                                <td>${formatNumber(costo.monto)}</td>
+                                <td>
+                                    <span class="status-badge ${costo.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
+                                        ${costo.moneda || 'CLP'}
+                                    </span>
+                                </td>
                                 <td>${costo.notas || '-'}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="editOtroCosto('${costo.id}')" style="margin-right: 0.5rem;">✏️</button>
+                                    <button class="btn btn-danger" onclick="deleteOtroCosto('${costo.id}', '${costo.concepto}')">🗑️</button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
