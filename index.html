@@ -1627,16 +1627,24 @@ async function showNewCostoFijoModal() {
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                         <div>
+                            <label class="form-label">Moneda *</label>
+                            <select name="moneda" class="form-input" required>
+                                <option value="CLP">CLP (Pesos Chilenos)</option>
+                                <option value="USD">USD (Dólares)</option>
+                            </select>
+                        </div>
+                        <div>
                             <label class="form-label">Categoría</label>
                             <input type="text" name="categoria" class="form-input" placeholder="Arriendo, Servicios, etc.">
                         </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem;">
                         <div>
                             <label class="form-label">Fecha Inicio *</label>
                             <input type="date" name="fecha_inicio" class="form-input" required>
                         </div>
                     </div>
-                    
-                    <div style="display: flex; gap: 1rem;">
                         <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
                         <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Costo Fijo</button>
                     </div>
@@ -1654,6 +1662,7 @@ async function showNewCostoFijoModal() {
         const data = {
             nombre_costo: formData.get('nombre_costo'),
             monto: parseFloat(formData.get('monto')),
+            moneda: formData.get('moneda'),  // AGREGAR ESTA LÍNEA
             frecuencia: formData.get('frecuencia'),
             fecha_inicio: formData.get('fecha_inicio'),
             categoria: formData.get('categoria') || null,

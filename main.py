@@ -570,21 +570,17 @@ async def create_embarque(embarque: EmbarqueCreate):
 # MODELOS PARA COSTOS FIJOS
 # =============================================
 
+# Actualizar modelo de CostoFijoCreate
 class CostoFijoCreate(BaseModel):
     nombre_costo: str
     monto: float
-    frecuencia: str  # 'mensual', 'trimestral', 'anual'
+    moneda: str = "CLP"  # Agregar este campo
+    frecuencia: str
     fecha_inicio: date
     categoria: Optional[str] = None
     activo: Optional[bool] = True
 
-class CostoFijoUpdate(BaseModel):
-    nombre_costo: Optional[str] = None
-    monto: Optional[float] = None
-    frecuencia: Optional[str] = None
-    fecha_inicio: Optional[date] = None
-    categoria: Optional[str] = None
-    activo: Optional[bool] = None
+
 
 # =============================================
 # ENDPOINTS DE COSTOS FIJOS
@@ -615,6 +611,9 @@ async def create_costo_fijo(costo: CostoFijoCreate):
         
         if costo.monto <= 0:
             raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+
+        if costo.moneda not in ["USD", "CLP"]:
+            raise HTTPException(status_code=400, detail="La moneda debe ser USD o CLP")
             
         if costo.frecuencia not in ["mensual", "trimestral", "anual"]:
             raise HTTPException(status_code=400, detail="La frecuencia debe ser mensual, trimestral o anual")
@@ -626,7 +625,9 @@ async def create_costo_fijo(costo: CostoFijoCreate):
             "frecuencia": costo.frecuencia,
             "fecha_inicio": costo.fecha_inicio.isoformat(),
             "categoria": costo.categoria.strip() if costo.categoria else None,
+            "moneda": costo.moneda,
             "activo": costo.activo if costo.activo is not None else True
+            
         }
         
         result = supabase.table('costos_fijos_recurrentes').insert(costo_data).execute()
@@ -645,10 +646,12 @@ async def create_costo_fijo(costo: CostoFijoCreate):
 # MODELOS PARA OTROS COSTOS
 # =============================================
 
+# Actualizar modelo de OtroCostoCreate
 class OtroCostoCreate(BaseModel):
     fecha: date
     concepto: str
     monto: float
+    moneda: str = "CLP"  # Agregar este campo
     categoria: Optional[str] = None
     notas: Optional[str] = None
 
@@ -678,6 +681,9 @@ async def create_otro_costo(costo: OtroCostoCreate):
         # Validaciones
         if not costo.concepto.strip():
             raise HTTPException(status_code=400, detail="El concepto es requerido")
+
+        if costo.moneda not in ["USD", "CLP"]:
+            raise HTTPException(status_code=400, detail="La moneda debe ser USD o CLP")
         
         if costo.monto <= 0:
             raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
@@ -691,6 +697,7 @@ async def create_otro_costo(costo: OtroCostoCreate):
             "categoria": "extraordinario",
             "concepto": costo.concepto.strip(),
             "monto": costo.monto,
+            "moneda": costo.moneda,
             "notas": costo.notas.strip() if costo.notas else None
         }
         
