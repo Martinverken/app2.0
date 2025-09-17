@@ -899,59 +899,299 @@
             `;
         }
 
-        // Cargar facturas pendientes
+        // =============================================
+// CARGAR FACTURAS CON VENCIMIENTOS
+// =============================================
+
         async function loadFacturasPendientes() {
             const container = document.getElementById('facturas-pendientes-list');
-            container.innerHTML = `
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Número</th>
-                            <th>Proveedor</th>
-                            <th>Monto Total</th>
-                            <th>Anticipo Aplicado</th>
-                            <th>Saldo Pendiente</th>
-                            <th>Vencimiento</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="8" style="text-align: center; color: #718096; padding: 2rem;">
-                                No hay facturas pendientes
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            `;
+            container.innerHTML = '<div class="loading">Cargando facturas...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/facturas`);
+                const data = await response.json();
+                
+                if (data.success && data.data.length > 0) {
+                    const facturasPendientes = data.data.filter(f => 
+                        f.estado === 'pendiente' || f.estado === 'pagada_parcial'
+                    );
+                    
+                    if (facturasPendientes.length > 0) {
+                        container.innerHTML = `
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Número</th>
+                                        <th>Tipo</th>
+                                        <th>Embarque</th>
+                                        <th>Orden Compra</th>
+                                        <th>Monto Total</th>
+                                        <th>Vencimientos</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${facturasPendientes.map(factura => `
+                                        <tr>
+                                            <td><strong>${factura.numero_factura}</strong></td>
+                                            <td>
+                                                <span class="status-badge ${factura.tipo_factura === 'producto' ? 'status-pagada' : 'status-pendiente'}">
+                                                    ${factura.tipo_factura}
+                                                </span>
+                                            </td>
+                                            <td>${factura.embarques ? factura.embarques.numero_embarque : 'N/A'}</td>
+                                            <td>${factura.ordenes_compra ? factura.ordenes_compra.numero_orden : 'Solo servicio'}</td>
+                                            <td>
+                                                ${formatNumber(factura.monto_total)} 
+                                                <span class="status-badge ${factura.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
+                                                    ${factura.moneda}
+                                                </span>
+                                            </td>
+                                            <td>${generarVencimientosHTML(factura.vencimientos)}</td>
+                                            <td>
+                                                <span class="status-badge status-${getEstadoClass(factura.estado)}">
+                                                    ${getEstadoTexto(factura.estado)}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-success" onclick="verVencimientos('${factura.id}', '${factura.numero_factura}')" style="margin-right: 0.5rem;">📅</button>
+                                                <button class="btn btn-primary" onclick="pagarFactura('${factura.id}')" style="margin-right: 0.5rem;">💳</button>
+                                                <button class="btn btn-danger" onclick="deleteFactura('${factura.id}', '${factura.numero_factura}')">🗑️</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                    } else {
+                        container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas pendientes</p>';
+                    }
+                } else {
+                    container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas registradas</p>';
+                }
+            } catch (error) {
+                console.error('Error cargando facturas:', error);
+                container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar facturas</p>';
+            }
         }
 
-        // Cargar facturas pagadas
         async function loadFacturasPagadas() {
             const container = document.getElementById('facturas-pagadas-list');
-            container.innerHTML = `
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Número</th>
-                            <th>Proveedor</th>
-                            <th>Monto Total</th>
-                            <th>Fecha Pago</th>
-                            <th>Usuario</th>
-                            <th>Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="6" style="text-align: center; color: #718096; padding: 2rem;">
-                                No hay facturas pagadas
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            `;
+            container.innerHTML = '<div class="loading">Cargando facturas...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/facturas`);
+                const data = await response.json();
+                
+                if (data.success && data.data.length > 0) {
+                    const facturasPagadas = data.data.filter(f => f.estado === 'pagada_completa');
+                    
+                    if (facturasPagadas.length > 0) {
+                        container.innerHTML = `
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Número</th>
+                                        <th>Tipo</th>
+                                        <th>Embarque</th>
+                                        <th>Monto Total</th>
+                                        <th>Vencimientos Pagados</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${facturasPagadas.map(factura => `
+                                        <tr>
+                                            <td><strong>${factura.numero_factura}</strong></td>
+                                            <td>
+                                                <span class="status-badge ${factura.tipo_factura === 'producto' ? 'status-pagada' : 'status-pendiente'}">
+                                                    ${factura.tipo_factura}
+                                                </span>
+                                            </td>
+                                            <td>${factura.embarques ? factura.embarques.numero_embarque : 'N/A'}</td>
+                                            <td>
+                                                ${formatNumber(factura.monto_total)} 
+                                                <span class="status-badge ${factura.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
+                                                    ${factura.moneda}
+                                                </span>
+                                            </td>
+                                            <td>${generarVencimientosPagadosHTML(factura.vencimientos)}</td>
+                                            <td>
+                                                <span class="status-badge status-pagada">
+                                                    Pagada Completa
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-primary" onclick="verVencimientos('${factura.id}', '${factura.numero_factura}')">📅 Ver</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                    } else {
+                        container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas pagadas</p>';
+                    }
+                } else {
+                    container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas registradas</p>';
+                }
+            } catch (error) {
+                console.error('Error cargando facturas:', error);
+                container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar facturas</p>';
+            }
         }
+
+// =============================================
+// FUNCIONES AUXILIARES PARA MOSTRAR VENCIMIENTOS
+// =============================================
+
+            function generarVencimientosHTML(vencimientos) {
+                if (!vencimientos || vencimientos.length === 0) {
+                    return '<span style="color: #718096;">Sin vencimientos</span>';
+                }
+                
+                return vencimientos.map(v => {
+                    const fecha = new Date(v.fecha_vencimiento).toLocaleDateString();
+                    const monto = formatNumber(v.monto_cuota);
+                    const estadoClass = v.estado === 'pagada' ? 'status-pagada' : 
+                                    v.estado === 'vencida' ? 'status-vencida' : 'status-pendiente';
+                    
+                    return `
+                        <div style="margin-bottom: 0.25rem;">
+                            <span style="font-size: 0.75rem; font-weight: 600;">Cuota ${v.numero_cuota}:</span>
+                            <span style="font-size: 0.75rem;">${fecha}</span><br>
+                            <span style="font-size: 0.75rem;">$${monto}</span>
+                            <span class="status-badge ${estadoClass}" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">
+                                ${v.estado}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function generarVencimientosPagadosHTML(vencimientos) {
+                if (!vencimientos || vencimientos.length === 0) {
+                    return '<span style="color: #718096;">Sin vencimientos</span>';
+                }
+                
+                const vencimientosPagados = vencimientos.filter(v => v.estado === 'pagada');
+                
+                return vencimientosPagados.map(v => {
+                    const fechaVenc = new Date(v.fecha_vencimiento).toLocaleDateString();
+                    const fechaPago = v.fecha_pago ? new Date(v.fecha_pago).toLocaleDateString() : 'N/A';
+                    const monto = formatNumber(v.monto_cuota);
+                    
+                    return `
+                        <div style="margin-bottom: 0.25rem; font-size: 0.75rem;">
+                            <span style="font-weight: 600;">Cuota ${v.numero_cuota}:</span>
+                            Venc: ${fechaVenc} | Pagado: ${fechaPago}<br>
+                            <span style="color: #38a169; font-weight: 600;">$${monto}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function getEstadoClass(estado) {
+                switch(estado) {
+                    case 'pendiente': return 'pendiente';
+                    case 'pagada_parcial': return 'pendiente'; // Amarillo
+                    case 'pagada_completa': return 'pagada';   // Verde
+                    case 'vencida': return 'vencida';          // Rojo
+                    default: return 'pendiente';
+                }
+            }
+
+            function getEstadoTexto(estado) {
+                switch(estado) {
+                    case 'pendiente': return 'Pendiente';
+                    case 'pagada_parcial': return 'Parcial';
+                    case 'pagada_completa': return 'Completa';
+                    case 'vencida': return 'Vencida';
+                    default: return estado;
+                }
+            }
+
+            // =============================================
+            // MODAL PARA VER VENCIMIENTOS DETALLADOS
+            // =============================================
+
+            async function verVencimientos(facturaId, numeroFactura) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/facturas/${facturaId}/vencimientos`);
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        showAlert('Error al cargar vencimientos', 'error');
+                        return;
+                    }
+                    
+                    const vencimientos = data.data;
+                    
+                    const modal = document.createElement('div');
+                    modal.className = 'modal-simple';
+                    modal.innerHTML = `
+                        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+                            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px;">
+                                <h3 style="margin-bottom: 1.5rem;">📅 Vencimientos - ${numeroFactura}</h3>
+                                
+                                <div style="margin-bottom: 1.5rem;">
+                                    ${vencimientos.map(v => `
+                                        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: ${v.estado === 'pagada' ? '#f0fff4' : v.estado === 'vencida' ? '#fed7d7' : '#f7fafc'};">
+                                            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.5rem;">
+                                                <span style="font-weight: 600; font-size: 1.1rem;">Cuota ${v.numero_cuota}</span>
+                                                <span class="status-badge status-${v.estado === 'pagada' ? 'pagada' : v.estado === 'vencida' ? 'vencida' : 'pendiente'}">
+                                                    ${v.estado}
+                                                </span>
+                                            </div>
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.875rem;">
+                                                <div>
+                                                    <strong>Fecha Vencimiento:</strong><br>
+                                                    ${new Date(v.fecha_vencimiento).toLocaleDateString()}
+                                                </div>
+                                                <div>
+                                                    <strong>Monto:</strong><br>
+                                                    $${formatNumber(v.monto_cuota)}
+                                                </div>
+                                                ${v.fecha_pago ? `
+                                                    <div>
+                                                        <strong>Fecha Pago:</strong><br>
+                                                        ${new Date(v.fecha_pago).toLocaleDateString()}
+                                                    </div>
+                                                    <div>
+                                                        <strong>Pagado:</strong><br>
+                                                        $${formatNumber(v.monto_pagado || v.monto_cuota)}
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                            ${v.estado === 'pendiente' ? `
+                                                <div style="margin-top: 1rem;">
+                                                    <button class="btn btn-success" onclick="pagarVencimiento('${v.id}', ${v.numero_cuota}, ${v.monto_cuota})">
+                                                        💳 Pagar Cuota ${v.numero_cuota}
+                                                    </button>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                
+                                <div style="text-align: right;">
+                                    <button class="btn btn-primary" onclick="cerrarModal()">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    
+                } catch (error) {
+                    showAlert('Error al cargar vencimientos', 'error');
+                }
+            }
+
+            function pagarVencimiento(vencimientoId, numeroCuota, monto) {
+                showAlert(`Funcionalidad de pago para cuota ${numeroCuota} ($${formatNumber(monto)}) en desarrollo`, 'warning');
+            }
 
         // Cargar costos fijos
         async function loadCostosFijos() {
@@ -1952,7 +2192,7 @@ async function loadFacturasPagadas() {
 }
 
 // =============================================
-// MODAL NUEVA FACTURA
+// MODAL NUEVA FACTURA CON VENCIMIENTOS MÚLTIPLES
 // =============================================
 
 async function showNewFacturaModal() {
@@ -1983,9 +2223,10 @@ async function showNewFacturaModal() {
         modal.className = 'modal-simple';
         modal.innerHTML = `
             <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
-                <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 700px; max-height: 90vh; overflow-y: auto;">
-                    <h3 style="margin-bottom: 1.5rem;">Nueva Factura</h3>
+                <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                    <h3 style="margin-bottom: 1.5rem;">Nueva Factura con Vencimientos</h3>
                     <form id="nueva-factura-form">
+                        <!-- DATOS BÁSICOS -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                             <div>
                                 <label class="form-label">Número Factura *</label>
@@ -2018,6 +2259,7 @@ async function showNewFacturaModal() {
                             </div>
                         </div>
                         
+                        <!-- MONTOS -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                             <div>
                                 <label class="form-label">Monto Base *</label>
@@ -2037,18 +2279,13 @@ async function showNewFacturaModal() {
                             </div>
                         </div>
                         
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                            <div>
-                                <label class="form-label">Monto Total *</label>
-                                <input type="number" name="monto_total" class="form-input" step="0.01" required readonly>
-                            </div>
-                            <div>
-                                <label class="form-label">Fecha Vencimiento *</label>
-                                <input type="date" name="fecha_vencimiento" class="form-input" required>
-                            </div>
+                        <div style="margin-bottom: 1.5rem;">
+                            <label class="form-label">Monto Total *</label>
+                            <input type="number" name="monto_total" class="form-input" step="0.01" required readonly>
                         </div>
                         
-                        <div id="servicio-fields" style="display: none; margin-bottom: 1rem;">
+                        <!-- CAMPOS DE SERVICIO -->
+                        <div id="servicio-fields" style="display: none; margin-bottom: 1.5rem;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                 <div>
                                     <label class="form-label">Concepto</label>
@@ -2058,6 +2295,42 @@ async function showNewFacturaModal() {
                                     <label class="form-label">Proveedor Servicio</label>
                                     <input type="text" name="proveedor_servicio" class="form-input" placeholder="Naviera, agente, etc.">
                                 </div>
+                            </div>
+                        </div>
+                        
+                        <!-- VENCIMIENTOS -->
+                        <div style="border: 2px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4 style="margin: 0; color: #2d3748;">📅 Vencimientos</h4>
+                                <div>
+                                    <button type="button" class="btn btn-primary" onclick="agregarVencimiento()" style="margin-right: 0.5rem;">+ Agregar</button>
+                                    <button type="button" class="btn" onclick="repartirEquitativamente()" style="background: #38a169; color: white;">⚖️ Repartir</button>
+                                </div>
+                            </div>
+                            
+                            <div id="vencimientos-container">
+                                <!-- Vencimiento 1 (obligatorio) -->
+                                <div class="vencimiento-item" data-cuota="1" style="display: grid; grid-template-columns: 80px 1fr 1fr 50px; gap: 1rem; align-items: end; margin-bottom: 1rem; padding: 1rem; background: #f7fafc; border-radius: 8px;">
+                                    <div>
+                                        <label class="form-label">Cuota</label>
+                                        <input type="number" class="form-input" value="1" readonly style="background: #e2e8f0;">
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Fecha Vencimiento *</label>
+                                        <input type="date" name="fecha_venc_1" class="form-input" required>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Monto *</label>
+                                        <input type="number" name="monto_venc_1" class="form-input" step="0.01" required onchange="validarSumaVencimientos()">
+                                    </div>
+                                    <div style="display: flex; align-items: center; height: 100%;">
+                                        <span style="color: #718096; font-size: 0.875rem;">Obligatorio</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="suma-vencimientos" style="text-align: right; font-weight: 600; color: #2d3748;">
+                                Suma vencimientos: $0.00
                             </div>
                         </div>
                         
@@ -2075,6 +2348,29 @@ async function showNewFacturaModal() {
         document.getElementById('nueva-factura-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            // Recopilar vencimientos
+            const vencimientos = [];
+            const vencimientosItems = document.querySelectorAll('.vencimiento-item');
+            
+            vencimientosItems.forEach(item => {
+                const cuota = parseInt(item.dataset.cuota);
+                const fecha = item.querySelector(`input[name="fecha_venc_${cuota}"]`).value;
+                const monto = parseFloat(item.querySelector(`input[name="monto_venc_${cuota}"]`).value);
+                
+                if (fecha && monto > 0) {
+                    vencimientos.push({
+                        numero_cuota: cuota,
+                        fecha_vencimiento: fecha,
+                        monto_cuota: monto
+                    });
+                }
+            });
+            
+            if (vencimientos.length === 0) {
+                showAlert('Debe tener al menos un vencimiento', 'error');
+                return;
+            }
+            
             const formData = new FormData(e.target);
             const data = {
                 numero_factura: formData.get('numero_factura'),
@@ -2085,9 +2381,9 @@ async function showNewFacturaModal() {
                 moneda: formData.get('moneda'),
                 iva: parseFloat(formData.get('iva')) || 0,
                 monto_total: parseFloat(formData.get('monto_total')),
-                fecha_vencimiento: formData.get('fecha_vencimiento'),
                 concepto: formData.get('concepto') || null,
-                proveedor_servicio: formData.get('proveedor_servicio') || null
+                proveedor_servicio: formData.get('proveedor_servicio') || null,
+                vencimientos: vencimientos
             };
 
             try {
@@ -2117,37 +2413,112 @@ async function showNewFacturaModal() {
 }
 
 // =============================================
-// FUNCIONES AUXILIARES DEL MODAL
+// FUNCIONES PARA MANEJAR VENCIMIENTOS
 // =============================================
 
-function toggleFacturaFields(tipo) {
-    const ordenSelect = document.querySelector('select[name="orden_compra_id"]');
-    const ordenLabel = document.getElementById('orden-label');
-    const servicioFields = document.getElementById('servicio-fields');
+function agregarVencimiento() {
+    const container = document.getElementById('vencimientos-container');
+    const vencimientosExistentes = container.querySelectorAll('.vencimiento-item').length;
     
-    if (tipo === 'producto') {
-        ordenSelect.required = true;
-        ordenLabel.textContent = 'Orden de Compra *';
-        servicioFields.style.display = 'none';
-    } else if (tipo === 'servicio') {
-        ordenSelect.required = false;
-        ordenLabel.textContent = 'Orden de Compra (opcional)';
-        servicioFields.style.display = 'block';
+    if (vencimientosExistentes >= 3) {
+        showAlert('Máximo 3 vencimientos permitidos', 'warning');
+        return;
+    }
+    
+    const nuevaCuota = vencimientosExistentes + 1;
+    
+    const vencimientoHTML = `
+        <div class="vencimiento-item" data-cuota="${nuevaCuota}" style="display: grid; grid-template-columns: 80px 1fr 1fr 50px; gap: 1rem; align-items: end; margin-bottom: 1rem; padding: 1rem; background: #f7fafc; border-radius: 8px;">
+            <div>
+                <label class="form-label">Cuota</label>
+                <input type="number" class="form-input" value="${nuevaCuota}" readonly style="background: #e2e8f0;">
+            </div>
+            <div>
+                <label class="form-label">Fecha Vencimiento *</label>
+                <input type="date" name="fecha_venc_${nuevaCuota}" class="form-input" required>
+            </div>
+            <div>
+                <label class="form-label">Monto *</label>
+                <input type="number" name="monto_venc_${nuevaCuota}" class="form-input" step="0.01" required onchange="validarSumaVencimientos()">
+            </div>
+            <div style="display: flex; align-items: center; height: 100%;">
+                <button type="button" onclick="eliminarVencimiento(${nuevaCuota})" class="btn btn-danger" style="padding: 0.5rem;">🗑️</button>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', vencimientoHTML);
+    validarSumaVencimientos();
+}
+
+function eliminarVencimiento(cuota) {
+    if (cuota === 1) {
+        showAlert('No se puede eliminar el primer vencimiento', 'warning');
+        return;
+    }
+    
+    const vencimiento = document.querySelector(`[data-cuota="${cuota}"]`);
+    vencimiento.remove();
+    validarSumaVencimientos();
+}
+
+function repartirEquitativamente() {
+    const montoTotal = parseFloat(document.querySelector('input[name="monto_total"]').value) || 0;
+    const vencimientos = document.querySelectorAll('.vencimiento-item');
+    
+    if (montoTotal === 0) {
+        showAlert('Primero ingresa el monto base', 'warning');
+        return;
+    }
+    
+    const montoPorCuota = (montoTotal / vencimientos.length).toFixed(2);
+    
+    vencimientos.forEach((item, index) => {
+        const cuota = parseInt(item.dataset.cuota);
+        const montoInput = item.querySelector(`input[name="monto_venc_${cuota}"]`);
+        
+        // La última cuota se ajusta para evitar diferencias por redondeo
+        if (index === vencimientos.length - 1) {
+            const sumaAnteriores = Array.from(vencimientos).slice(0, -1).reduce((sum, v) => {
+                const c = parseInt(v.dataset.cuota);
+                const m = parseFloat(document.querySelector(`input[name="monto_venc_${c}"]`).value) || 0;
+                return sum + m;
+            }, 0);
+            montoInput.value = (montoTotal - sumaAnteriores).toFixed(2);
+        } else {
+            montoInput.value = montoPorCuota;
+        }
+    });
+    
+    validarSumaVencimientos();
+}
+
+function validarSumaVencimientos() {
+    const montoTotal = parseFloat(document.querySelector('input[name="monto_total"]').value) || 0;
+    const vencimientos = document.querySelectorAll('.vencimiento-item');
+    
+    let sumaVencimientos = 0;
+    vencimientos.forEach(item => {
+        const cuota = parseInt(item.dataset.cuota);
+        const monto = parseFloat(document.querySelector(`input[name="monto_venc_${cuota}"]`).value) || 0;
+        sumaVencimientos += monto;
+    });
+    
+    const sumContainer = document.getElementById('suma-vencimientos');
+    const diferencia = Math.abs(sumaVencimientos - montoTotal);
+    
+    if (diferencia < 0.01) {
+        sumContainer.innerHTML = `✅ Suma vencimientos: $${formatNumber(sumaVencimientos)} (Correcto)`;
+        sumContainer.style.color = '#38a169';
+    } else {
+        sumContainer.innerHTML = `❌ Suma vencimientos: $${formatNumber(sumaVencimientos)} (Diferencia: $${formatNumber(diferencia)})`;
+        sumContainer.style.color = '#e53e3e';
     }
 }
 
-function toggleIVA(moneda) {
-    const ivaField = document.getElementById('iva-field');
-    const ivaInput = document.querySelector('input[name="iva"]');
-    
-    if (moneda === 'CLP') {
-        ivaField.style.display = 'block';
-    } else {
-        ivaField.style.display = 'none';
-        ivaInput.value = '';
-    }
-    calcularTotal();
-}
+// =============================================
+// ACTUALIZAR FUNCIONES AUXILIARES EXISTENTES
+// =============================================
 
 function calcularTotal() {
     const montoBase = parseFloat(document.querySelector('input[name="monto_base"]').value) || 0;
@@ -2163,28 +2534,10 @@ function calcularTotal() {
     
     const total = montoBase + iva;
     totalInput.value = total.toFixed(2);
-}
-
-async function deleteFactura(facturaId, numeroFactura) {
-    if (!confirm(`¿Estás seguro de eliminar la factura "${numeroFactura}"?`)) {
-        return;
-    }
     
-    try {
-        const response = await fetch(`${API_BASE}/api/facturas/${facturaId}`, {
-            method: 'DELETE'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showAlert(result.message, 'success');
-            loadFacturasPendientes();
-        } else {
-            showAlert('Error: ' + result.detail, 'error');
-        }
-    } catch (error) {
-        showAlert('Error de conexión', 'error');
+    // Actualizar validación de vencimientos si existe
+    if (document.getElementById('suma-vencimientos')) {
+        validarSumaVencimientos();
     }
 }
 

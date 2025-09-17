@@ -720,31 +720,39 @@ async def create_otro_costo(costo: OtroCostoCreate):
         raise HTTPException(status_code=500, detail=f"Error al crear otro costo: {str(e)}")
 
 # =============================================
-# MODELOS PARA FACTURAS
+# MODELOS ACTUALIZADOS PARA FACTURAS CON VENCIMIENTOS
 # =============================================
 
-class FacturaCreate(BaseModel):
+from typing import List
+
+class VencimientoCreate(BaseModel):
+    numero_cuota: int  # 1, 2, o 3
+    fecha_vencimiento: date
+    monto_cuota: float
+
+class FacturaCreateConVencimientos(BaseModel):
     numero_factura: str
     embarque_id: str
-    orden_compra_id: Optional[str] = None  # Opcional
+    orden_compra_id: Optional[str] = None
     monto_base: float
-    moneda: str  # USD o CLP
-    iva: Optional[float] = 0  # Solo para CLP
+    moneda: str
+    iva: Optional[float] = 0
     monto_total: float
-    fecha_vencimiento: date
-    tipo_factura: str  # 'producto' o 'servicio'
+    tipo_factura: str
     concepto: Optional[str] = None
     proveedor_servicio: Optional[str] = None
+    vencimientos: List[VencimientoCreate]
 
 # =============================================
-# ENDPOINTS DE FACTURAS
+# REEMPLAZAR ENDPOINTS DE FACTURAS EXISTENTES
 # =============================================
 
 @app.get("/api/facturas")
-async def get_facturas():
-    """Obtener todas las facturas con información relacionada"""
+async def get_facturas_con_vencimientos():
+    """Obtener todas las facturas con sus vencimientos"""
     try:
-        result = supabase.table('facturas').select("""
+        # Obtener facturas
+        facturas_result = supabase.table('facturas').select("""
             *,
             embarques!facturas_embarque_id_fkey (
                 id,
@@ -757,19 +765,29 @@ async def get_facturas():
             )
         """).order('created_at', desc=True).execute()
         
+        # Obtener vencimientos
+        vencimientos_result = supabase.table('facturas_vencimientos').select("*").order('numero_cuota').execute()
+        
+        # Combinar datos
+        facturas_con_vencimientos = []
+        for factura in facturas_result.data:
+            vencimientos = [v for v in vencimientos_result.data if v['factura_id'] == factura['id']]
+            factura['vencimientos'] = vencimientos
+            facturas_con_vencimientos.append(factura)
+        
         return {
             "success": True,
-            "data": result.data,
-            "total": len(result.data)
+            "data": facturas_con_vencimientos,
+            "total": len(facturas_con_vencimientos)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener facturas: {str(e)}")
 
 @app.post("/api/facturas")
-async def create_factura(factura: FacturaCreate):
-    """Crear una nueva factura"""
+async def create_factura_con_vencimientos(factura: FacturaCreateConVencimientos):
+    """Crear una nueva factura con sus vencimientos"""
     try:
-        # Validaciones
+        # Validaciones básicas
         if not factura.numero_factura.strip():
             raise HTTPException(status_code=400, detail="El número de factura es requerido")
         
@@ -781,6 +799,27 @@ async def create_factura(factura: FacturaCreate):
             
         if factura.tipo_factura not in ["producto", "servicio"]:
             raise HTTPException(status_code=400, detail="El tipo debe ser 'producto' o 'servicio'")
+        
+        # Validar vencimientos
+        if not factura.vencimientos or len(factura.vencimientos) == 0:
+            raise HTTPException(status_code=400, detail="Debe tener al menos un vencimiento")
+            
+        if len(factura.vencimientos) > 3:
+            raise HTTPException(status_code=400, detail="Máximo 3 vencimientos permitidos")
+        
+        # Validar que la suma de cuotas = monto total
+        suma_cuotas = sum(v.monto_cuota for v in factura.vencimientos)
+        if abs(suma_cuotas - factura.monto_total) > 0.01:  # Tolerancia de 1 centavo
+            raise HTTPException(status_code=400, detail=f"La suma de cuotas ({suma_cuotas}) debe igualar el monto total ({factura.monto_total})")
+        
+        # Verificar números de cuota únicos y válidos
+        numeros_cuota = [v.numero_cuota for v in factura.vencimientos]
+        if len(set(numeros_cuota)) != len(numeros_cuota):
+            raise HTTPException(status_code=400, detail="Los números de cuota deben ser únicos")
+            
+        for num in numeros_cuota:
+            if num not in [1, 2, 3]:
+                raise HTTPException(status_code=400, detail="Los números de cuota deben ser 1, 2 o 3")
         
         # Verificar que el embarque existe
         embarque_result = supabase.table('embarques').select('id').eq('id', factura.embarque_id).execute()
@@ -798,7 +837,7 @@ async def create_factura(factura: FacturaCreate):
         if factura_existente.data:
             raise HTTPException(status_code=400, detail="Ya existe una factura con ese número")
         
-        # Crear factura
+        # Crear factura principal
         factura_data = {
             "numero_factura": factura.numero_factura.strip(),
             "embarque_id": factura.embarque_id,
@@ -807,7 +846,6 @@ async def create_factura(factura: FacturaCreate):
             "moneda": factura.moneda,
             "iva": factura.iva,
             "monto_total": factura.monto_total,
-            "fecha_vencimiento": factura.fecha_vencimiento.isoformat(),
             "tipo_factura": factura.tipo_factura,
             "concepto": factura.concepto.strip() if factura.concepto else None,
             "proveedor_servicio": factura.proveedor_servicio.strip() if factura.proveedor_servicio else None,
@@ -815,34 +853,59 @@ async def create_factura(factura: FacturaCreate):
             "saldo_pendiente": factura.monto_total
         }
         
-        result = supabase.table('facturas').insert(factura_data).execute()
+        factura_result = supabase.table('facturas').insert(factura_data).execute()
+        factura_id = factura_result.data[0]['id']
+        
+        # Crear vencimientos
+        vencimientos_data = []
+        for venc in factura.vencimientos:
+            vencimientos_data.append({
+                "factura_id": factura_id,
+                "numero_cuota": venc.numero_cuota,
+                "fecha_vencimiento": venc.fecha_vencimiento.isoformat(),
+                "monto_cuota": venc.monto_cuota,
+                "estado": "pendiente"
+            })
+        
+        vencimientos_result = supabase.table('facturas_vencimientos').insert(vencimientos_data).execute()
         
         return {
             "success": True,
-            "message": f"✅ Factura '{factura.numero_factura}' creada exitosamente",
-            "data": result.data[0]
+            "message": f"✅ Factura '{factura.numero_factura}' creada con {len(factura.vencimientos)} vencimientos",
+            "data": {
+                "factura": factura_result.data[0],
+                "vencimientos": vencimientos_result.data
+            }
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al crear factura: {str(e)}")
 
-@app.delete("/api/facturas/{factura_id}")
-async def delete_factura(factura_id: str):
-    """Eliminar una factura"""
+@app.get("/api/facturas/{factura_id}/vencimientos")
+async def get_vencimientos_factura(factura_id: str):
+    """Obtener los vencimientos de una factura específica"""
     try:
-        # Verificar si tiene pagos registrados
-        # (cuando implementemos pagos, descomentar esto)
-        # pagos_result = supabase.table('pagos').select("id").eq('factura_id', factura_id).limit(1).execute()
-        # if pagos_result.data:
-        #     raise HTTPException(status_code=400, detail="❌ No se puede eliminar: la factura tiene pagos registrados")
+        result = supabase.table('facturas_vencimientos').select("*").eq('factura_id', factura_id).order('numero_cuota').execute()
         
-        # Eliminar la factura
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener vencimientos: {str(e)}")
+
+@app.delete("/api/facturas/{factura_id}")
+async def delete_factura_con_vencimientos(factura_id: str):
+    """Eliminar una factura y sus vencimientos"""
+    try:
+        # Los vencimientos se eliminan automáticamente por ON DELETE CASCADE
         result = supabase.table('facturas').delete().eq('id', factura_id).execute()
         
         return {
             "success": True,
-            "message": "✅ Factura eliminada exitosamente"
+            "message": "✅ Factura y sus vencimientos eliminados exitosamente"
         }
     except HTTPException:
         raise
