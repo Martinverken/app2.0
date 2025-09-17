@@ -850,7 +850,6 @@ async def create_factura_con_vencimientos(factura: FacturaCreateConVencimientos)
             "concepto": factura.concepto.strip() if factura.concepto else None,
             "proveedor_servicio": factura.proveedor_servicio.strip() if factura.proveedor_servicio else None,
             "estado": "pendiente",
-            "saldo_pendiente": factura.monto_total
         }
         
         factura_result = supabase.table('facturas').insert(factura_data).execute()
