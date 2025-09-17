@@ -1462,6 +1462,82 @@ async function loadEmbarques() {
         container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar embarques</p>';
     }
 }
+
+// Mostrar modal para nuevo embarque
+async function showNewEmbarqueModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-simple';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px;">
+                <h3 style="margin-bottom: 1.5rem;">Nuevo Embarque</h3>
+                <form id="nuevo-embarque-form">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label class="form-label">Número de Embarque *</label>
+                            <input type="text" name="numero_embarque" class="form-input" required placeholder="EMB-001">
+                        </div>
+                        <div>
+                            <label class="form-label">Fecha de Embarque</label>
+                            <input type="date" name="fecha_embarque" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label class="form-label">Fecha Llegada Estimada</label>
+                            <input type="date" name="fecha_llegada_estimada" class="form-input">
+                        </div>
+                        <div>
+                            <label class="form-label">Fecha Llegada Real</label>
+                            <input type="date" name="fecha_llegada_real" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Embarque</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Manejar envío del formulario
+    document.getElementById('nuevo-embarque-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            numero_embarque: formData.get('numero_embarque'),
+            fecha_embarque: formData.get('fecha_embarque') || null,
+            fecha_llegada_estimada: formData.get('fecha_llegada_estimada') || null,
+            fecha_llegada_real: formData.get('fecha_llegada_real') || null
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/embarques`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('✅ ' + result.message);
+                modal.remove();
+                loadEmbarques();
+            } else {
+                alert('❌ Error: ' + result.detail);
+            }
+        } catch (error) {
+            alert('❌ Error de conexión');
+        }
+    });
+}
+
     
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
