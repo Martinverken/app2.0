@@ -1745,7 +1745,7 @@ async function showNewOtroCostoModal() {
             <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px;">
                 <h3 style="margin-bottom: 1.5rem;">Registrar Gasto Extraordinario</h3>
                 <form id="nuevo-otro-costo-form">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                         <div>
                             <label class="form-label">Fecha *</label>
                             <input type="date" name="fecha" class="form-input" required>
@@ -1753,6 +1753,13 @@ async function showNewOtroCostoModal() {
                         <div>
                             <label class="form-label">Monto *</label>
                             <input type="number" name="monto" class="form-input" step="0.01" min="0.01" required placeholder="50000">
+                        </div>
+                        <div>
+                            <label class="form-label">Moneda *</label>
+                            <select name="moneda" class="form-input" required>
+                                <option value="CLP">CLP</option>
+                                <option value="USD">USD</option>
+                            </select>
                         </div>
                     </div>
                     
@@ -1785,6 +1792,7 @@ async function showNewOtroCostoModal() {
             fecha: formData.get('fecha'),
             concepto: formData.get('concepto'),
             monto: parseFloat(formData.get('monto')),
+            moneda: formData.get('moneda'),  // AGREGAR ESTA LÍNEA
             notas: formData.get('notas') || null
         };
 
