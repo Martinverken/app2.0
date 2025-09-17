@@ -1124,7 +1124,25 @@
         }
 
         // Funciones placeholder para otros modales
-      
+        function showNewFacturaModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewCostoFijoModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewOtroCostoModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewOrdenModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
+
+        function showNewEmbarqueModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
 
         function editProveedor(id) {
             showAlert('Funcionalidad de edición en desarrollo', 'warning');
@@ -1525,10 +1543,6 @@ async function showNewEmbarqueModal() {
 // =============================================
 
 // Cargar costos fijos
-// =============================================
-// FUNCIÓN ACTUALIZADA: loadCostosFijos
-// =============================================
-
 async function loadCostosFijos() {
     const container = document.getElementById('costos-fijos-list');
     container.innerHTML = '<div class="loading">Cargando costos fijos...</div>';
@@ -1544,24 +1558,17 @@ async function loadCostosFijos() {
                         <tr>
                             <th>Concepto</th>
                             <th>Monto</th>
-                            <th>Moneda</th>
                             <th>Frecuencia</th>
                             <th>Categoría</th>
                             <th>Fecha Inicio</th>
                             <th>Estado</th>
-                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${data.data.map(costo => `
                             <tr>
                                 <td><strong>${costo.nombre_costo}</strong></td>
-                                <td>${formatNumber(costo.monto)}</td>
-                                <td>
-                                    <span class="status-badge ${costo.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
-                                        ${costo.moneda || 'CLP'}
-                                    </span>
-                                </td>
+                                <td>$${formatNumber(costo.monto)}</td>
                                 <td>
                                     <span class="status-badge status-${costo.frecuencia}">
                                         ${costo.frecuencia}
@@ -1573,10 +1580,6 @@ async function loadCostosFijos() {
                                     <span class="status-badge ${costo.activo ? 'status-pagada' : 'status-pendiente'}">
                                         ${costo.activo ? 'Activo' : 'Inactivo'}
                                     </span>
-                                </td>
-                                <td>
-                                    <button class="btn btn-primary" onclick="editCostoFijo('${costo.id}')" style="margin-right: 0.5rem;">✏️</button>
-                                    <button class="btn btn-danger" onclick="deleteCostoFijo('${costo.id}', '${costo.nombre_costo}')">🗑️</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -1692,6 +1695,7 @@ async function showNewCostoFijoModal() {
 // FUNCIONES DE OTROS COSTOS
 // =============================================
 
+// Cargar otros costos
 async function loadOtrosCostos() {
     const container = document.getElementById('otros-costos-list');
     container.innerHTML = '<div class="loading">Cargando otros costos...</div>';
@@ -1708,9 +1712,7 @@ async function loadOtrosCostos() {
                             <th>Fecha</th>
                             <th>Concepto</th>
                             <th>Monto</th>
-                            <th>Moneda</th>
                             <th>Notas</th>
-                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1718,17 +1720,8 @@ async function loadOtrosCostos() {
                             <tr>
                                 <td>${new Date(costo.fecha).toLocaleDateString()}</td>
                                 <td><strong>${costo.concepto}</strong></td>
-                                <td>${formatNumber(costo.monto)}</td>
-                                <td>
-                                    <span class="status-badge ${costo.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
-                                        ${costo.moneda || 'CLP'}
-                                    </span>
-                                </td>
+                                <td>$${formatNumber(costo.monto)}</td>
                                 <td>${costo.notas || '-'}</td>
-                                <td>
-                                    <button class="btn btn-primary" onclick="editOtroCosto('${costo.id}')" style="margin-right: 0.5rem;">✏️</button>
-                                    <button class="btn btn-danger" onclick="deleteOtroCosto('${costo.id}', '${costo.concepto}')">🗑️</button>
-                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -1753,22 +1746,22 @@ async function showNewOtroCostoModal() {
                 <h3 style="margin-bottom: 1.5rem;">Registrar Gasto Extraordinario</h3>
                 <form id="nuevo-otro-costo-form">
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                        <div>
-                            <label class="form-label">Fecha *</label>
-                            <input type="date" name="fecha" class="form-input" required>
-                        </div>
-                        <div>
-                            <label class="form-label">Monto *</label>
-                            <input type="number" name="monto" class="form-input" step="0.01" min="0.01" required placeholder="50000">
-                        </div>
-                        <div>
-                            <label class="form-label">Moneda *</label>
-                            <select name="moneda" class="form-input" required>
-                                <option value="CLP">CLP</option>
-                                <option value="USD">USD</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha" class="form-input" required>
                     </div>
+                    <div>
+                        <label class="form-label">Monto *</label>
+                        <input type="number" name="monto" class="form-input" step="0.01" min="0.01" required placeholder="50000">
+                    </div>
+                    <div>
+                        <label class="form-label">Moneda *</label>
+                        <select name="moneda" class="form-input" required>
+                            <option value="CLP">CLP</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                </div>
                     
                     <div style="margin-bottom: 1rem;">
                         <label class="form-label">Concepto *</label>
@@ -1790,6 +1783,40 @@ async function showNewOtroCostoModal() {
     `;
     document.body.appendChild(modal);
 
+    // Manejar envío del formulario
+    document.getElementById('nuevo-otro-costo-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            fecha: formData.get('fecha'),
+            concepto: formData.get('concepto'),
+            monto: parseFloat(formData.get('monto')),
+            moneda: formData.get('moneda'),  // AGREGAR ESTA LÍNEA
+            notas: formData.get('notas') || null
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/otros-costos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('✅ ' + result.message);
+                modal.remove();
+                loadOtrosCostos();
+            } else {
+                alert('❌ Error: ' + result.detail);
+            }
+        } catch (error) {
+            alert('❌ Error de conexión');
+        }
+    });
+}
 
 // =============================================
 // CARGAR FACTURAS
@@ -2164,42 +2191,6 @@ async function deleteFactura(facturaId, numeroFactura) {
 function pagarFactura(facturaId) {
     showAlert('Funcionalidad de pago en desarrollo', 'warning');
 }
-
-    // Manejar envío del formulario
-    document.getElementById('nuevo-otro-costo-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const formData = new FormData(e.target);
-        const data = {
-            fecha: formData.get('fecha'),
-            concepto: formData.get('concepto'),
-            monto: parseFloat(formData.get('monto')),
-            moneda: formData.get('moneda'),  // AGREGAR ESTA LÍNEA
-            notas: formData.get('notas') || null
-        };
-
-        try {
-            const response = await fetch(`${API_BASE}/api/otros-costos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-                alert('✅ ' + result.message);
-                modal.remove();
-                loadOtrosCostos();
-            } else {
-                alert('❌ Error: ' + result.detail);
-            }
-        } catch (error) {
-            alert('❌ Error de conexión');
-        }
-    });
-}
-
     
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
