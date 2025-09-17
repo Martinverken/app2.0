@@ -642,6 +642,71 @@ async def create_costo_fijo(costo: CostoFijoCreate):
         raise HTTPException(status_code=500, detail=f"Error al crear costo fijo: {str(e)}")
 
 # =============================================
+# MODELOS PARA OTROS COSTOS
+# =============================================
+
+class OtroCostoCreate(BaseModel):
+    fecha: date
+    concepto: str
+    monto: float
+    categoria: Optional[str] = None
+    notas: Optional[str] = None
+
+# =============================================
+# ENDPOINTS DE OTROS COSTOS
+# =============================================
+
+@app.get("/api/otros-costos")
+async def get_otros_costos():
+    """Obtener todos los otros costos"""
+    try:
+        result = supabase.table('flujo_caja_movimientos').select("*").eq('categoria', 'extraordinario').order('fecha', desc=True).execute()
+        
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data),
+            "message": f"Se encontraron {len(result.data)} otros costos"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener otros costos: {str(e)}")
+
+@app.post("/api/otros-costos")
+async def create_otro_costo(costo: OtroCostoCreate):
+    """Crear un nuevo otro costo"""
+    try:
+        # Validaciones
+        if not costo.concepto.strip():
+            raise HTTPException(status_code=400, detail="El concepto es requerido")
+        
+        if costo.monto <= 0:
+            raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+        
+        # Crear movimiento en flujo de caja
+        costo_data = {
+            "año": costo.fecha.year,
+            "mes": costo.fecha.month,
+            "fecha": costo.fecha.isoformat(),
+            "tipo_movimiento": "egreso",
+            "categoria": "extraordinario",
+            "concepto": costo.concepto.strip(),
+            "monto": costo.monto,
+            "notas": costo.notas.strip() if costo.notas else None
+        }
+        
+        result = supabase.table('flujo_caja_movimientos').insert(costo_data).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Costo '{costo.concepto}' registrado exitosamente",
+            "data": result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear otro costo: {str(e)}")
+
+# =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
 # =============================================
 

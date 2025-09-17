@@ -1682,6 +1682,125 @@ async function showNewCostoFijoModal() {
     });
 }
 
+// =============================================
+// FUNCIONES DE OTROS COSTOS
+// =============================================
+
+// Cargar otros costos
+async function loadOtrosCostos() {
+    const container = document.getElementById('otros-costos-list');
+    container.innerHTML = '<div class="loading">Cargando otros costos...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/otros-costos`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Concepto</th>
+                            <th>Monto</th>
+                            <th>Notas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.data.map(costo => `
+                            <tr>
+                                <td>${new Date(costo.fecha).toLocaleDateString()}</td>
+                                <td><strong>${costo.concepto}</strong></td>
+                                <td>$${formatNumber(costo.monto)}</td>
+                                <td>${costo.notas || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay otros costos registrados</p>';
+        }
+    } catch (error) {
+        console.error('Error cargando otros costos:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar otros costos</p>';
+    }
+}
+
+// Mostrar modal para nuevo otro costo
+async function showNewOtroCostoModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-simple';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px;">
+                <h3 style="margin-bottom: 1.5rem;">Registrar Gasto Extraordinario</h3>
+                <form id="nuevo-otro-costo-form">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label class="form-label">Fecha *</label>
+                            <input type="date" name="fecha" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="form-label">Monto *</label>
+                            <input type="number" name="monto" class="form-input" step="0.01" min="0.01" required placeholder="50000">
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Concepto *</label>
+                        <input type="text" name="concepto" class="form-input" required placeholder="Multa, reparación, gasto imprevisto...">
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Notas adicionales</label>
+                        <textarea name="notas" class="form-input" rows="3" placeholder="Detalles adicionales..."></textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">Registrar Gasto</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Manejar envío del formulario
+    document.getElementById('nuevo-otro-costo-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            fecha: formData.get('fecha'),
+            concepto: formData.get('concepto'),
+            monto: parseFloat(formData.get('monto')),
+            notas: formData.get('notas') || null
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/otros-costos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('✅ ' + result.message);
+                modal.remove();
+                loadOtrosCostos();
+            } else {
+                alert('❌ Error: ' + result.detail);
+            }
+        } catch (error) {
+            alert('❌ Error de conexión');
+        }
+    });
+}
+
     
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
