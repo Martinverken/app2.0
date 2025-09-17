@@ -1136,7 +1136,13 @@
             showAlert('Funcionalidad en desarrollo', 'warning');
         }
 
+        function showNewOrdenModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
 
+        function showNewEmbarqueModal() {
+            showAlert('Funcionalidad en desarrollo', 'warning');
+        }
 
         function editProveedor(id) {
             showAlert('Funcionalidad de edición en desarrollo', 'warning');
@@ -1523,6 +1529,150 @@ async function showNewEmbarqueModal() {
                 alert('✅ ' + result.message);
                 modal.remove();
                 loadEmbarques();
+            } else {
+                alert('❌ Error: ' + result.detail);
+            }
+        } catch (error) {
+            alert('❌ Error de conexión');
+        }
+    });
+}
+
+// =============================================
+// FUNCIONES DE COSTOS FIJOS
+// =============================================
+
+// Cargar costos fijos
+async function loadCostosFijos() {
+    const container = document.getElementById('costos-fijos-list');
+    container.innerHTML = '<div class="loading">Cargando costos fijos...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/costos-fijos`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Monto</th>
+                            <th>Frecuencia</th>
+                            <th>Categoría</th>
+                            <th>Fecha Inicio</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.data.map(costo => `
+                            <tr>
+                                <td><strong>${costo.nombre_costo}</strong></td>
+                                <td>$${formatNumber(costo.monto)}</td>
+                                <td>
+                                    <span class="status-badge status-${costo.frecuencia}">
+                                        ${costo.frecuencia}
+                                    </span>
+                                </td>
+                                <td>${costo.categoria || '-'}</td>
+                                <td>${costo.fecha_inicio ? new Date(costo.fecha_inicio).toLocaleDateString() : '-'}</td>
+                                <td>
+                                    <span class="status-badge ${costo.activo ? 'status-pagada' : 'status-pendiente'}">
+                                        ${costo.activo ? 'Activo' : 'Inactivo'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay costos fijos registrados</p>';
+        }
+    } catch (error) {
+        console.error('Error cargando costos fijos:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar costos fijos</p>';
+    }
+}
+
+// Mostrar modal para nuevo costo fijo
+async function showNewCostoFijoModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-simple';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px;">
+                <h3 style="margin-bottom: 1.5rem;">Nuevo Costo Fijo</h3>
+                <form id="nuevo-costo-fijo-form">
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Nombre del Costo *</label>
+                        <input type="text" name="nombre_costo" class="form-input" required placeholder="Arriendo oficina">
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label class="form-label">Monto *</label>
+                            <input type="number" name="monto" class="form-input" step="0.01" min="0.01" required placeholder="500000">
+                        </div>
+                        <div>
+                            <label class="form-label">Frecuencia *</label>
+                            <select name="frecuencia" class="form-input" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="mensual">Mensual</option>
+                                <option value="trimestral">Trimestral</option>
+                                <option value="anual">Anual</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label class="form-label">Categoría</label>
+                            <input type="text" name="categoria" class="form-input" placeholder="Arriendo, Servicios, etc.">
+                        </div>
+                        <div>
+                            <label class="form-label">Fecha Inicio *</label>
+                            <input type="date" name="fecha_inicio" class="form-input" required>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Costo Fijo</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Manejar envío del formulario
+    document.getElementById('nuevo-costo-fijo-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            nombre_costo: formData.get('nombre_costo'),
+            monto: parseFloat(formData.get('monto')),
+            frecuencia: formData.get('frecuencia'),
+            fecha_inicio: formData.get('fecha_inicio'),
+            categoria: formData.get('categoria') || null,
+            activo: true
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/costos-fijos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('✅ ' + result.message);
+                modal.remove();
+                loadCostosFijos();
             } else {
                 alert('❌ Error: ' + result.detail);
             }
