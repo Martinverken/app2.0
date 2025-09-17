@@ -1409,6 +1409,59 @@ Anticipo: $${orden.monto_anticipo_pagado || 0}
         showAlert('Error al cargar datos de la orden', 'error');
     }
 }
+
+// =============================================
+// FUNCIONES DE EMBARQUES
+// =============================================
+
+// Cargar embarques
+async function loadEmbarques() {
+    const container = document.getElementById('embarques-list');
+    container.innerHTML = '<div class="loading">Cargando embarques...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/embarques`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Fecha Embarque</th>
+                            <th>Llegada Estimada</th>
+                            <th>Llegada Real</th>
+                            <th>Estado</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.data.map(embarque => `
+                            <tr>
+                                <td><strong>${embarque.numero_embarque}</strong></td>
+                                <td>${embarque.fecha_embarque ? new Date(embarque.fecha_embarque).toLocaleDateString() : 'Sin fecha'}</td>
+                                <td>${embarque.fecha_llegada_estimada ? new Date(embarque.fecha_llegada_estimada).toLocaleDateString() : '-'}</td>
+                                <td>${embarque.fecha_llegada_real ? new Date(embarque.fecha_llegada_real).toLocaleDateString() : '-'}</td>
+                                <td>
+                                    <span class="status-badge status-${embarque.estado || 'en_transito'}">
+                                        ${(embarque.estado || 'en_transito').replace('_', ' ')}
+                                    </span>
+                                </td>
+                                <td>$${formatNumber(embarque.total_embarque || 0)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay embarques registrados</p>';
+        }
+    } catch (error) {
+        console.error('Error cargando embarques:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar embarques</p>';
+    }
+}
     
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
