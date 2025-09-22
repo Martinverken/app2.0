@@ -1,0 +1,257 @@
+# =============================================
+# CONFIGURAR MONITOREO PASO A PASO
+# =============================================
+
+# 1. CREAR ARCHIVO PARA VERIFICAR ERRORES
+cat > check_errors.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Script para revisar errores en la aplicación y base de datos
+"""
+
+import json
+from datetime import datetime
+from supabase import create_client
+import os
+import requests
+
+# Configuración
+SUPABASE_URL = "https://ponpwlirxrkqduyqhfhf.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvbnB3bGlyeHJrcWR1eXFoZmhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5NzM0MDcsImV4cCI6MjA3MzU0OTQwN30.mwPG4GjJQrNLpD9snPJgEYlMPsDLICyqSl8U8xJqMoA"
+
+def print_header(title):
+    print("\n" + "="*60)
+    print(f"🔍 {title}")
+    print("="*60)
+
+def check_database_health():
+    """Verificar salud de la base de datos"""
+    print_header("ESTADO DE LA BASE DE DATOS")
+    
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        # Verificar cada tabla
+        tables = ['proveedores', 'ordenes_compra', 'embarques', 'facturas', 
+                 'costos_fijos_recurrentes', 'flujo_caja_movimientos']
+        
+        print("📊 Estado de las tablas:")
+        all_healthy = True
+        
+        for table in tables:
+            try:
+                result = supabase.table(table).select("count", count="exact").execute()
+                print(f"  ✅ {table:<25} {result.count:>8} registros")
+            except Exception as e:
+                print(f"  ❌ {table:<25} ERROR: {str(e)}")
+                all_healthy = False
+        
+        return all_healthy
+        
+    except Exception as e:
+        print(f"❌ Error general de conexión: {str(e)}")
+        return False
+
+def check_api_health():
+    """Verificar que la API esté funcionando"""
+    print_header("ESTADO DE LA API")
+    
+    api_base = "http://localhost:8000"
+    endpoints = [
+        ("/", "Página principal"),
+        ("/health", "Estado de salud"),
+        ("/api/proveedores", "Lista de proveedores"),
+        ("/api/stats", "Estadísticas")
+    ]
+    
+    api_healthy = True
+    
+    for endpoint, description in endpoints:
+        try:
+            response = requests.get(f"{api_base}{endpoint}", timeout=5)
+            
+            if response.status_code == 200:
+                print(f"  ✅ {description:<20} OK ({response.status_code})")
+                
+                # Mostrar info adicional para algunos endpoints
+                if endpoint == "/api/proveedores":
+                    try:
+                        data = response.json()
+                        if 'data' in data:
+                            print(f"     → {len(data['data'])} proveedores encontrados")
+                    except:
+                        pass
+                        
+            else:
+                print(f"  ❌ {description:<20} Error {response.status_code}")
+                api_healthy = False
+                
+        except requests.exceptions.ConnectionError:
+            print(f"  ❌ {description:<20} No conecta (¿servidor corriendo?)")
+            api_healthy = False
+        except Exception as e:
+            print(f"  ❌ {description:<20} Error: {str(e)}")
+            api_healthy = False
+    
+    return api_healthy
+
+def check_data_integrity():
+    """Verificar integridad de los datos"""
+    print_header("INTEGRIDAD DE DATOS")
+    
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        issues = []
+        
+        # 1. Verificar proveedores duplicados
+        proveedores = supabase.table('proveedores').select('nombre').execute()
+        nombres = [p['nombre'] for p in proveedores.data]
+        duplicados = set([n for n in nombres if nombres.count(n) > 1])
+        
+        if duplicados:
+            issues.append(f"⚠️  Proveedores duplicados: {', '.join(duplicados)}")
+        
+        # 2. Verificar órdenes sin proveedor válido
+        ordenes = supabase.table('ordenes_compra').select('id, proveedor_id').execute()
+        proveedores_ids = supabase.table('proveedores').select('id').execute()
+        valid_ids = {p['id'] for p in proveedores_ids.data}
+        
+        invalid_ordenes = [o for o in ordenes.data if o['proveedor_id'] not in valid_ids]
+        if invalid_ordenes:
+            issues.append(f"❌ {len(invalid_ordenes)} órdenes con proveedor inválido")
+        
+        # 3. Verificar facturas sin proveedor válido
+        facturas = supabase.table('facturas').select('id, proveedor_id').execute()
+        invalid_facturas = [f for f in facturas.data if f['proveedor_id'] not in valid_ids]
+        if invalid_facturas:
+            issues.append(f"❌ {len(invalid_facturas)} facturas con proveedor inválido")
+        
+        # Mostrar resultados
+        if issues:
+            for issue in issues:
+                print(f"  {issue}")
+        else:
+            print("  ✅ Integridad de datos: OK")
+            
+        return len(issues) == 0
+        
+    except Exception as e:
+        print(f"  ❌ Error verificando integridad: {str(e)}")
+        return False
+
+def show_recent_activity():
+    """Mostrar actividad reciente"""
+    print_header("ACTIVIDAD RECIENTE")
+    
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        
+        # Proveedores recientes
+        proveedores = supabase.table('proveedores').select('*').order('created_at', desc=True).limit(3).execute()
+        
+        if proveedores.data:
+            print("📋 Últimos proveedores creados:")
+            for p in proveedores.data:
+                fecha = datetime.fromisoformat(p['created_at'].replace('Z', '+00:00'))
+                print(f"  • {p['nombre']} ({p['pais_origen']}) - {fecha.strftime('%Y-%m-%d %H:%M')}")
+        else:
+            print("  ℹ️  No hay actividad reciente")
+            
+    except Exception as e:
+        print(f"  ❌ Error obteniendo actividad: {str(e)}")
+
+def generate_summary_report():
+    """Generar reporte completo"""
+    print("🏥 REPORTE DE SALUD DEL SISTEMA")
+    print(f"🕐 Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Ejecutar todas las verificaciones
+    db_healthy = check_database_health()
+    api_healthy = check_api_health()
+    data_healthy = check_data_integrity()
+    
+    show_recent_activity()
+    
+    # Resumen final
+    print_header("RESUMEN GENERAL")
+    
+    status_items = [
+        ("Base de datos", "✅ SALUDABLE" if db_healthy else "❌ PROBLEMAS"),
+        ("API", "✅ FUNCIONANDO" if api_healthy else "❌ PROBLEMAS"),
+        ("Integridad", "✅ OK" if data_healthy else "❌ PROBLEMAS")
+    ]
+    
+    for item, status in status_items:
+        print(f"  {item:<15} {status}")
+    
+    overall_health = all([db_healthy, api_healthy, data_healthy])
+    
+    print(f"\n🎯 ESTADO GENERAL: {'✅ SISTEMA SALUDABLE' if overall_health else '❌ REQUIERE ATENCIÓN'}")
+    
+    print(f"\n💡 COMANDOS ÚTILES:")
+    print(f"  python3 check_errors.py     # Ejecutar este reporte")
+    print(f"  python3 test_connections.py # Probar conexiones")
+    print(f"  http://localhost:8000/docs  # Documentación API")
+
+if __name__ == "__main__":
+    generate_summary_report()
+EOF
+
+# 2. HACER EL ARCHIVO EJECUTABLE
+chmod +x check_errors.py
+
+# 3. CREAR ARCHIVO DE CONFIGURACIÓN PARA LOGS
+cat > logging_config.py << 'EOF'
+import logging
+import sys
+from datetime import datetime
+import os
+
+def setup_logging():
+    """Configurar sistema de logging"""
+    
+    # Crear directorio de logs si no existe
+    os.makedirs('logs', exist_ok=True)
+    
+    # Formato de logs
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Handler para consola
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
+    
+    # Handler para archivo
+    file_handler = logging.FileHandler('logs/app.log')
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.DEBUG)
+    
+    # Handler para errores
+    error_handler = logging.FileHandler('logs/errors.log')
+    error_handler.setFormatter(formatter)
+    error_handler.setLevel(logging.ERROR)
+    
+    # Configurar logger principal
+    logger = logging.getLogger("sistema_inventario")
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    logger.addHandler(error_handler)
+    
+    return logger
+
+# Logger global
+app_logger = setup_logging()
+EOF
+
+echo "✅ Archivos de monitoreo creados exitosamente!"
+echo ""
+echo "📋 ARCHIVOS CREADOS:"
+echo "  - check_errors.py      # Script principal de monitoreo"
+echo "  - logging_config.py    # Configuración de logs"
+echo ""
+echo "🚀 PARA EMPEZAR A MONITOREAR:"
+echo "  python3 check_errors.py"
