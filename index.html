@@ -916,8 +916,6 @@
             try {
                 const response = await fetch(`${API_BASE}/api/facturas`);
                 const data = await response.json();
-
-                console.log('🔍 DEBUG - Respuesta completa del backend:', JSON.stringify(data, null, 2));
                 
                 if (data.success && data.data.length > 0) {
                     const facturasPendientes = data.data.filter(f => 
@@ -1056,7 +1054,6 @@
 // =============================================
 
             function generarVencimientosHTML(vencimientos) {
-    console.log('🔍 DEBUG - Vencimientos completos:', JSON.stringify(vencimientos, null, 2));
     
     if (!vencimientos || vencimientos.length === 0) {
         return '<span style="color: #718096;">Sin vencimientos - Array vacío o null</span>';
@@ -1066,14 +1063,14 @@
         console.log(`🔍 Procesando vencimiento ${index + 1}:`, v);
         
         // Mostrar el valor RAW de la fecha
-        let fecha = `RAW: ${v.fecha_vencimiento}`;
+        let fecha = ` ${v.fecha_vencimiento}`;
         let monto = v.monto_cuota || 'Sin monto';
         let estado = v.estado || 'Sin estado';
         let cuota = v.numero_cuota || 'Sin número';
         
         return `
             <div style="margin-bottom: 0.25rem; font-size: 0.75rem; border: 1px solid red; padding: 0.5rem;">
-                <strong>DEBUG Cuota ${cuota}:</strong><br>
+                <strong>Cuota ${cuota}:</strong><br>
                 Fecha: ${fecha}<br>
                 Monto: $${monto}<br>
                 Estado: ${estado}
@@ -1472,28 +1469,26 @@ function formatNumber(num) {
     }).format(num);
 }
 
-        // Función mejorada para cerrar modales
+// =============================================
+// FUNCIÓN MEJORADA PARA CERRAR MODALES
+// =============================================
+
 function cerrarModal() {
-    // Buscar todos los tipos de modales posibles
+    // Cerrar todos los tipos de modales
     const modalSelectors = [
         '.modal-simple',
-        '#proveedor-modal',
-        '#orden-modal',
-        '[id$="-modal"]',
-        '.modal-overlay'
+        '[style*="position: fixed"]',
+        '[style*="z-index: 2000"]'
     ];
     
     modalSelectors.forEach(selector => {
         const modals = document.querySelectorAll(selector);
-        modals.forEach(modal => modal.remove());
-    });
-    
-    // También buscar modales creados dinámicamente con position: fixed
-    const fixedModals = document.querySelectorAll('[style*="position: fixed"]');
-    fixedModals.forEach(modal => {
-        if (modal.style.zIndex === '2000' || modal.style.zIndex === '3000') {
-            modal.remove();
-        }
+        modals.forEach(modal => {
+            if (modal.style.position === 'fixed' && 
+                (modal.style.zIndex === '2000' || modal.style.zIndex === '3000')) {
+                modal.remove();
+            }
+        });
     });
 }
 
@@ -2069,136 +2064,7 @@ async function showNewOtroCostoModal() {
     });
 }
 
-// =============================================
-// CARGAR FACTURAS
-// =============================================
 
-async function loadFacturasPendientes() {
-    const container = document.getElementById('facturas-pendientes-list');
-    container.innerHTML = '<div class="loading">Cargando facturas...</div>';
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/facturas`);
-        const data = await response.json();
-        
-        if (data.success && data.data.length > 0) {
-            const facturasPendientes = data.data.filter(f => f.estado === 'pendiente');
-            
-            if (facturasPendientes.length > 0) {
-                container.innerHTML = `
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Número</th>
-                                <th>Tipo</th>
-                                <th>Embarque</th>
-                                <th>Orden Compra</th>
-                                <th>Monto</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${facturasPendientes.map(factura => `
-                                <tr>
-                                    <td><strong>${factura.numero_factura}</strong></td>
-                                    <td>
-                                        <span class="status-badge ${factura.tipo_factura === 'producto' ? 'status-pagada' : 'status-pendiente'}">
-                                            ${factura.tipo_factura}
-                                        </span>
-                                    </td>
-                                    <td>${factura.embarques ? factura.embarques.numero_embarque : 'N/A'}</td>
-                                    <td>${factura.ordenes_compra ? factura.ordenes_compra.numero_orden : 'Solo servicio'}</td>
-                                    <td>
-                                        ${formatNumber(factura.monto_total)} 
-                                        <span class="status-badge ${factura.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
-                                            ${factura.moneda}
-                                        </span>
-                                    </td>                                    <td>
-                                        <span class="status-badge status-${factura.estado}">
-                                            ${factura.estado}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-success" onclick="verVencimientos('${factura.id}', '${factura.numero_factura}')" style="margin-right: 0.5rem;">📅</button>
-                                        <button class="btn btn-primary" onclick="pagarFactura('${factura.id}')" style="margin-right: 0.5rem;">💳</button>
-                                        <button class="btn btn-danger" onclick="deleteFactura('${factura.id}', '${factura.numero_factura}')">🗑️</button>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } else {
-                container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas pendientes</p>';
-            }
-        } else {
-            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas registradas</p>';
-        }
-    } catch (error) {
-        console.error('Error cargando facturas:', error);
-        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar facturas</p>';
-    }
-}
-
-async function loadFacturasPagadas() {
-    const container = document.getElementById('facturas-pagadas-list');
-    container.innerHTML = '<div class="loading">Cargando facturas...</div>';
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/facturas`);
-        const data = await response.json();
-        
-        if (data.success && data.data.length > 0) {
-            const facturasPagadas = data.data.filter(f => f.estado === 'pagada');
-            
-            if (facturasPagadas.length > 0) {
-                container.innerHTML = `
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Número</th>
-                                <th>Tipo</th>
-                                <th>Embarque</th>
-                                <th>Monto</th>
-                                <th>Fecha Pago</th>
-                                <th>Usuario</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${facturasPagadas.map(factura => `
-                                <tr>
-                                    <td><strong>${factura.numero_factura}</strong></td>
-                                    <td>
-                                        <span class="status-badge ${factura.tipo_factura === 'producto' ? 'status-pagada' : 'status-pendiente'}">
-                                            ${factura.tipo_factura}
-                                        </span>
-                                    </td>
-                                    <td>${factura.embarques ? factura.embarques.numero_embarque : 'N/A'}</td>
-                                    <td>
-                                        ${formatNumber(factura.monto_total)} 
-                                        <span class="status-badge ${factura.moneda === 'USD' ? 'status-pagada' : 'status-pendiente'}">
-                                            ${factura.moneda}
-                                        </span>
-                                    </td>
-                                    <td>${factura.fecha_pago ? new Date(factura.fecha_pago).toLocaleDateString() : '-'}</td>
-                                    <td>${factura.usuario_pago || '-'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } else {
-                container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas pagadas</p>';
-            }
-        } else {
-            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay facturas registradas</p>';
-        }
-    } catch (error) {
-        console.error('Error cargando facturas:', error);
-        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar facturas</p>';
-    }
-}
 
 // =============================================
 // MODAL NUEVA FACTURA CON VENCIMIENTOS MÚLTIPLES
@@ -2552,6 +2418,274 @@ function calcularTotal() {
 
 function pagarFactura(facturaId) {
     showAlert('Funcionalidad de pago en desarrollo', 'warning');
+}
+
+// =============================================
+// MODAL PARA PAGAR VENCIMIENTO
+// =============================================
+
+async function pagarVencimiento(vencimientoId, numeroCuota, monto) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-simple';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 500px;">
+                <h3 style="margin-bottom: 1.5rem;">💳 Pagar Cuota ${numeroCuota}</h3>
+                
+                <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div style="font-weight: 600; color: #2d3748;">Monto a pagar:</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: #38a169;">$${formatNumber(monto)}</div>
+                </div>
+                
+                <form id="pago-vencimiento-form">
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Fecha de Pago *</label>
+                        <input type="date" name="fecha_pago" class="form-input" required value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Método de Pago *</label>
+                        <select name="metodo_pago" class="form-input" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="credito_bancario">Crédito Bancario</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Usuario que Paga</label>
+                        <input type="text" name="usuario_pago" class="form-input" placeholder="Nombre del usuario">
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <label class="form-label">Notas</label>
+                        <textarea name="notas" class="form-input" rows="3" placeholder="Comentarios adicionales..."></textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                        <button type="submit" class="btn btn-success" style="flex: 1;">Registrar Pago</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Manejar envío del formulario
+    document.getElementById('pago-vencimiento-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            vencimiento_id: vencimientoId,
+            fecha_pago: formData.get('fecha_pago'),
+            monto_pagado: parseFloat(monto),
+            metodo_pago: formData.get('metodo_pago'),
+            usuario_pago: formData.get('usuario_pago') || null,
+            notas: formData.get('notas') || null
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/pagos-facturas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert(result.message, 'success');
+                modal.remove();
+                // Cerrar modal de vencimientos también
+                cerrarModal();
+                // Recargar lista de facturas
+                loadFacturasPendientes();
+            } else {
+                showAlert('Error: ' + result.detail, 'error');
+            }
+        } catch (error) {
+            showAlert('Error de conexión', 'error');
+        }
+    });
+}
+
+// =============================================
+// ACTUALIZAR FUNCIÓN pagarFactura (botón 💳 en tabla)
+// =============================================
+
+function pagarFactura(facturaId) {
+    // En lugar del mensaje "en desarrollo", abrir modal de vencimientos
+    const facturas = document.querySelectorAll('tr');
+    let numeroFactura = 'N/A';
+    
+    // Buscar el número de factura en la tabla
+    facturas.forEach(fila => {
+        const botones = fila.querySelectorAll('button');
+        botones.forEach(btn => {
+            if (btn.onclick && btn.onclick.toString().includes(facturaId)) {
+                const numeroCell = fila.querySelector('td strong');
+                if (numeroCell) {
+                    numeroFactura = numeroCell.textContent;
+                }
+            }
+        });
+    });
+    
+    // Abrir modal de vencimientos directamente
+    verVencimientos(facturaId, numeroFactura);
+}
+
+// AGREGAR TODAS ESTAS FUNCIONES AUXILIARES:
+
+function toggleFacturaFields(tipo) {
+    const ordenSelect = document.querySelector('select[name="orden_compra_id"]');
+    const ordenLabel = document.getElementById('orden-label');
+    const servicioFields = document.getElementById('servicio-fields');
+    
+    if (tipo === 'producto') {
+        ordenSelect.required = true;
+        ordenLabel.textContent = 'Orden de Compra *';
+        servicioFields.style.display = 'none';
+    } else if (tipo === 'servicio') {
+        ordenSelect.required = false;
+        ordenLabel.textContent = 'Orden de Compra (opcional)';
+        servicioFields.style.display = 'block';
+    }
+}
+
+function toggleIVA(moneda) {
+    const ivaField = document.getElementById('iva-field');
+    const ivaInput = document.querySelector('input[name="iva"]');
+    
+    if (moneda === 'CLP') {
+        ivaField.style.display = 'block';
+    } else {
+        ivaField.style.display = 'none';
+        ivaInput.value = '';
+    }
+    calcularTotal();
+}
+
+function calcularTotal() {
+    const montoBase = parseFloat(document.querySelector('input[name="monto_base"]').value) || 0;
+    const moneda = document.querySelector('select[name="moneda"]').value;
+    const ivaInput = document.querySelector('input[name="iva"]');
+    const totalInput = document.querySelector('input[name="monto_total"]');
+    
+    let iva = 0;
+    if (moneda === 'CLP' && montoBase > 0) {
+        iva = montoBase * 0.19;
+        ivaInput.value = iva.toFixed(2);
+    }
+    
+    const total = montoBase + iva;
+    totalInput.value = total.toFixed(2);
+    
+    if (document.getElementById('suma-vencimientos')) {
+        validarSumaVencimientos();
+    }
+}
+
+function agregarVencimiento() {
+    const container = document.getElementById('vencimientos-container');
+    const vencimientosExistentes = container.querySelectorAll('.vencimiento-item').length;
+    
+    if (vencimientosExistentes >= 3) {
+        showAlert('Máximo 3 vencimientos permitidos', 'warning');
+        return;
+    }
+    
+    const nuevaCuota = vencimientosExistentes + 1;
+    
+    const vencimientoHTML = `
+        <div class="vencimiento-item" data-cuota="${nuevaCuota}" style="display: grid; grid-template-columns: 80px 1fr 1fr 50px; gap: 1rem; align-items: end; margin-bottom: 1rem; padding: 1rem; background: #f7fafc; border-radius: 8px;">
+            <div>
+                <label class="form-label">Cuota</label>
+                <input type="number" class="form-input" value="${nuevaCuota}" readonly style="background: #e2e8f0;">
+            </div>
+            <div>
+                <label class="form-label">Fecha Vencimiento *</label>
+                <input type="date" name="fecha_venc_${nuevaCuota}" class="form-input" required>
+            </div>
+            <div>
+                <label class="form-label">Monto *</label>
+                <input type="number" name="monto_venc_${nuevaCuota}" class="form-input" step="0.01" required onchange="validarSumaVencimientos()">
+            </div>
+            <div style="display: flex; align-items: center; height: 100%;">
+                <button type="button" onclick="eliminarVencimiento(${nuevaCuota})" class="btn btn-danger" style="padding: 0.5rem;">🗑️</button>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', vencimientoHTML);
+    validarSumaVencimientos();
+}
+
+function eliminarVencimiento(cuota) {
+    if (cuota === 1) {
+        showAlert('No se puede eliminar el primer vencimiento', 'warning');
+        return;
+    }
+    
+    const vencimiento = document.querySelector(`[data-cuota="${cuota}"]`);
+    vencimiento.remove();
+    validarSumaVencimientos();
+}
+
+function repartirEquitativamente() {
+    const montoTotal = parseFloat(document.querySelector('input[name="monto_total"]').value) || 0;
+    const vencimientos = document.querySelectorAll('.vencimiento-item');
+    
+    if (montoTotal === 0) {
+        showAlert('Primero ingresa el monto base', 'warning');
+        return;
+    }
+    
+    const montoPorCuota = (montoTotal / vencimientos.length).toFixed(2);
+    
+    vencimientos.forEach((item, index) => {
+        const cuota = parseInt(item.dataset.cuota);
+        const montoInput = item.querySelector(`input[name="monto_venc_${cuota}"]`);
+        
+        if (index === vencimientos.length - 1) {
+            const sumaAnteriores = Array.from(vencimientos).slice(0, -1).reduce((sum, v) => {
+                const c = parseInt(v.dataset.cuota);
+                const m = parseFloat(document.querySelector(`input[name="monto_venc_${c}"]`).value) || 0;
+                return sum + m;
+            }, 0);
+            montoInput.value = (montoTotal - sumaAnteriores).toFixed(2);
+        } else {
+            montoInput.value = montoPorCuota;
+        }
+    });
+    
+    validarSumaVencimientos();
+}
+
+function validarSumaVencimientos() {
+    const montoTotal = parseFloat(document.querySelector('input[name="monto_total"]').value) || 0;
+    const vencimientos = document.querySelectorAll('.vencimiento-item');
+    
+    let sumaVencimientos = 0;
+    vencimientos.forEach(item => {
+        const cuota = parseInt(item.dataset.cuota);
+        const monto = parseFloat(document.querySelector(`input[name="monto_venc_${cuota}"]`).value) || 0;
+        sumaVencimientos += monto;
+    });
+    
+    const sumContainer = document.getElementById('suma-vencimientos');
+    const diferencia = Math.abs(sumaVencimientos - montoTotal);
+    
+    if (diferencia < 0.01) {
+        sumContainer.innerHTML = `✅ Suma vencimientos: $${formatNumber(sumaVencimientos)} (Correcto)`;
+        sumContainer.style.color = '#38a169';
+    } else {
+        sumContainer.innerHTML = `❌ Suma vencimientos: $${formatNumber(sumaVencimientos)} (Diferencia: $${formatNumber(diferencia)})`;
+        sumContainer.style.color = '#e53e3e';
+    }
 }
     
         // Inicialización

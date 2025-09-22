@@ -774,6 +774,11 @@ async def get_facturas_con_vencimientos():
                 marca
             )
         """).order('created_at', desc=True).execute()
+
+        # AGREGAR ESTE DEBUG:
+        print(f"DEBUG - Facturas encontradas en DB: {len(facturas_result.data)}")
+        for i, f in enumerate(facturas_result.data):
+            print(f"Factura {i+1}: {f.get('numero_factura')} - Estado: {f.get('estado')}")
         
         # Obtener TODOS los vencimientos de una vez
         vencimientos_result = supabase.table('facturas_vencimientos').select("*").order('factura_id, numero_cuota').execute()
@@ -921,6 +926,201 @@ async def delete_factura_con_vencimientos(factura_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al eliminar factura: {str(e)}")
+
+# =============================================
+# MODELOS PARA PAGOS Y ANTICIPOS
+# =============================================
+
+class PagoFacturaCreate(BaseModel):
+    vencimiento_id: str
+    fecha_pago: date
+    monto_pagado: float
+    metodo_pago: str  # 'transferencia', 'credito_bancario', 'otro'
+    usuario_pago: Optional[str] = None
+    notas: Optional[str] = None
+
+class AnticipoCreate(BaseModel):
+    orden_compra_id: str
+    fecha_pago: date
+    monto: float
+    metodo_pago: str
+    usuario_pago: Optional[str] = None
+    notas: Optional[str] = None
+
+# =============================================
+# ENDPOINTS DE PAGOS DE FACTURAS
+# =============================================
+
+@app.post("/api/pagos-facturas")
+async def registrar_pago_factura(pago: PagoFacturaCreate):
+    """Registrar pago de una cuota específica"""
+    try:
+        # Validaciones
+        if pago.metodo_pago not in ["transferencia", "credito_bancario", "otro"]:
+            raise HTTPException(status_code=400, detail="Método de pago inválido")
+        
+        # Verificar que el vencimiento existe y está pendiente
+        vencimiento_result = supabase.table('facturas_vencimientos').select("*").eq('id', pago.vencimiento_id).execute()
+        if not vencimiento_result.data:
+            raise HTTPException(status_code=404, detail="Vencimiento no encontrado")
+        
+        vencimiento = vencimiento_result.data[0]
+        if vencimiento['estado'] == 'pagada':
+            raise HTTPException(status_code=400, detail="Esta cuota ya está pagada")
+        
+        # Validar que el monto coincida con la cuota
+        if abs(pago.monto_pagado - vencimiento['monto_cuota']) > 0.01:
+            raise HTTPException(status_code=400, detail=f"El monto debe ser exactamente ${vencimiento['monto_cuota']}")
+        
+        # Registrar el pago
+        pago_data = {
+            "vencimiento_id": pago.vencimiento_id,
+            "fecha_pago": pago.fecha_pago.isoformat(),
+            "monto_pagado": pago.monto_pagado,
+            "metodo_pago": pago.metodo_pago,
+            "usuario_pago": pago.usuario_pago.strip() if pago.usuario_pago else None,
+            "notas": pago.notas.strip() if pago.notas else None
+        }
+        
+        pago_result = supabase.table('pagos_facturas').insert(pago_data).execute()
+        
+        # Actualizar estado del vencimiento
+        supabase.table('facturas_vencimientos').update({
+            "estado": "pagada",
+            "fecha_pago": pago.fecha_pago.isoformat(),
+            "monto_pagado": pago.monto_pagado
+        }).eq('id', pago.vencimiento_id).execute()
+        
+        # Actualizar estado de la factura principal
+        await actualizar_estado_factura(vencimiento['factura_id'])
+        
+        return {
+            "success": True,
+            "message": f"✅ Pago de ${pago.monto_pagado} registrado exitosamente",
+            "data": pago_result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al registrar pago: {str(e)}")
+
+async def actualizar_estado_factura(factura_id: str):
+    """Actualizar el estado de la factura según sus vencimientos"""
+    try:
+        # Obtener todos los vencimientos de la factura
+        vencimientos_result = supabase.table('facturas_vencimientos').select("*").eq('factura_id', factura_id).execute()
+        vencimientos = vencimientos_result.data
+        
+        if not vencimientos:
+            return
+        
+        # Calcular estados
+        total_vencimientos = len(vencimientos)
+        vencimientos_pagados = len([v for v in vencimientos if v['estado'] == 'pagada'])
+        
+        # Determinar nuevo estado
+        if vencimientos_pagados == 0:
+            nuevo_estado = "pendiente"
+        elif vencimientos_pagados == total_vencimientos:
+            nuevo_estado = "pagada_completa"
+        else:
+            nuevo_estado = "pagada_parcial"
+        
+        # Calcular saldo pendiente
+        monto_total_vencimientos = sum(v['monto_cuota'] for v in vencimientos)
+        monto_pagado = sum(v['monto_pagado'] or 0 for v in vencimientos if v['estado'] == 'pagada')
+        saldo_pendiente = monto_total_vencimientos - monto_pagado
+        
+        # Actualizar factura
+        supabase.table('facturas').update({
+            "estado": nuevo_estado,
+            "saldo_pendiente": saldo_pendiente
+        }).eq('id', factura_id).execute()
+        
+    except Exception as e:
+        print(f"Error actualizando estado factura: {str(e)}")
+
+# =============================================
+# ENDPOINTS DE ANTICIPOS
+# =============================================
+
+@app.get("/api/ordenes/{orden_id}/anticipos")
+async def get_anticipos_orden(orden_id: str):
+    """Obtener anticipos de una orden de compra"""
+    try:
+        anticipos_result = supabase.table('anticipos_pagados').select("*").eq('orden_compra_id', orden_id).order('fecha_pago', desc=True).execute()
+        
+        # Calcular totales
+        total_anticipos = sum(a['monto'] for a in anticipos_result.data)
+        
+        # Obtener anticipos aplicados en facturas
+        facturas_result = supabase.table('facturas').select("anticipo_aplicado").eq('orden_compra_id', orden_id).execute()
+        total_aplicado = sum(f['anticipo_aplicado'] or 0 for f in facturas_result.data)
+        
+        saldo_disponible = total_anticipos - total_aplicado
+        
+        return {
+            "success": True,
+            "data": {
+                "anticipos": anticipos_result.data,
+                "total_anticipos": total_anticipos,
+                "total_aplicado": total_aplicado,
+                "saldo_disponible": saldo_disponible
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener anticipos: {str(e)}")
+
+@app.post("/api/anticipos")
+async def registrar_anticipo(anticipo: AnticipoCreate):
+    """Registrar un nuevo anticipo"""
+    try:
+        # Validaciones
+        if anticipo.metodo_pago not in ["transferencia", "credito_bancario", "otro"]:
+            raise HTTPException(status_code=400, detail="Método de pago inválido")
+        
+        if anticipo.monto <= 0:
+            raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+        
+        # Verificar que la orden existe
+        orden_result = supabase.table('ordenes_compra').select('id').eq('id', anticipo.orden_compra_id).execute()
+        if not orden_result.data:
+            raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
+        
+        # Registrar anticipo
+        anticipo_data = {
+            "orden_compra_id": anticipo.orden_compra_id,
+            "fecha_pago": anticipo.fecha_pago.isoformat(),
+            "monto": anticipo.monto,
+            "metodo_pago": anticipo.metodo_pago,
+            "usuario_pago": anticipo.usuario_pago.strip() if anticipo.usuario_pago else None,
+            "notas": anticipo.notas.strip() if anticipo.notas else None
+        }
+        
+        result = supabase.table('anticipos_pagados').insert(anticipo_data).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Anticipo de ${anticipo.monto} registrado exitosamente",
+            "data": result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al registrar anticipo: {str(e)}")
+
+@app.get("/api/pagos-facturas/vencimiento/{vencimiento_id}")
+async def get_pagos_vencimiento(vencimiento_id: str):
+    """Obtener pagos de un vencimiento específico"""
+    try:
+        result = supabase.table('pagos_facturas').select("*").eq('vencimiento_id', vencimiento_id).execute()
+        
+        return {
+            "success": True,
+            "data": result.data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener pagos: {str(e)}")
 
 # =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
