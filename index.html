@@ -450,7 +450,8 @@
                     <div id="facturas-submenu" class="hidden">
                         <div class="nav-sub-item" onclick="showSection('facturas-pendientes')">Pendientes de Pago</div>
                         <div class="nav-sub-item" onclick="showSection('facturas-pagadas')">Pagadas</div>
-                        <div class="nav-sub-item" onclick="showSection('registro-pagos')">Registro de Pagos</div>
+                        <div class="nav-sub-item" onclick="showSection('registro-pagos')">Pago Manual</div>
+                        <div class="nav-sub-item" onclick="showSection('historial-pagos')">Historial de Pagos</div>
                     </div>
                     <div class="nav-item" onclick="showSection('costos-fijos')">
                         <span class="nav-item-icon">🔄</span>
@@ -478,12 +479,17 @@
                     </div>
                 </div>
                 
+                  <div class="nav-section">
+                    <div class="nav-section-title">Control</div>
+                    <div class="nav-item" onclick="showResumenAnticipos()">
+                        <span class="nav-item-icon">💰</span>
+                        <span>Control de Anticipos</span>
+                    </div>
+                </div>
+                
                 <div class="nav-section">
                     <div class="nav-section-title">Reportes</div>
-                    <div class="nav-item" onclick="showSection('flujo-caja')">
-                        <span class="nav-item-icon">📈</span>
-                        <span>Flujo de Caja</span>
-                    </div>
+                    <!-- ... opciones existentes ... -->
                 </div>
             </nav>
         </div>
@@ -577,8 +583,8 @@
             <!-- Registro de Pagos -->
             <div id="registro-pagos" class="page-section hidden">
                 <div class="page-header">
-                    <h1 class="page-title">💳 Registro de Pagos</h1>
-                    <p class="page-subtitle">Registrar pagos de facturas</p>
+                    <h1 class="page-title">💳 Nuevo Pago Manual</h1>
+                    <p class="page-subtitle">Registrar pago manual de facturas</p>
                 </div>
                 
                 <div class="content-section">
@@ -606,6 +612,32 @@
                         </div>
                         <button type="submit" class="btn btn-success">Registrar Pago</button>
                     </form>
+                </div>
+            </div>
+
+
+            <!-- Historial de Pagos -->
+            <div id="historial-pagos" class="page-section hidden">
+                <div class="page-header">
+                    <h1 class="page-title">📋 Historial de Pagos</h1>
+                    <p class="page-subtitle">Todos los pagos realizados en el sistema</p>
+                </div>
+                
+                <div class="content-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 class="section-title">Registro Completo de Pagos</h2>
+                        <div>
+                            <select id="filtro-tipo-pago" class="form-input" style="margin-right: 1rem;" onchange="loadHistorialPagos()">
+                                <option value="">Todos los tipos</option>
+                                <option value="vencimiento">Pagos de Vencimientos</option>
+                                <option value="manual">Pagos Manuales</option>
+                            </select>
+                            <input type="month" id="filtro-mes" class="form-input" onchange="loadHistorialPagos()" style="width: 150px;">
+                        </div>
+                    </div>
+                    <div id="historial-pagos-list">
+                        <p style="color: #718096;">Cargando historial de pagos...</p>
+                    </div>
                 </div>
             </div>
 
@@ -865,6 +897,9 @@
                     break;
                 case 'facturas-pagadas':
                     loadFacturasPagadas();
+                    break;
+                case 'historial-pagos':
+                    loadHistorialPagos();
                     break;
                 case 'costos-fijos':
                     loadCostosFijos();
@@ -1467,6 +1502,148 @@ function formatNumber(num) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     }).format(num);
+}
+
+// =============================================
+// FUNCIÓN PARA EL MENÚ - RESUMEN DE ANTICIPOS
+// =============================================
+
+async function showResumenAnticipos() {
+    // Ocultar todas las secciones
+    document.querySelectorAll('.page-section').forEach(section => {
+        section.classList.add('hidden');
+    });
+    
+    // Crear sección de resumen
+    const mainContent = document.querySelector('.main-content');
+    
+    // Remover sección anterior si existe
+    const existing = document.getElementById('resumen-anticipos');
+    if (existing) existing.remove();
+    
+    const section = document.createElement('div');
+    section.id = 'resumen-anticipos';
+    section.className = 'page-section';
+    
+    section.innerHTML = `
+        <div class="page-header">
+            <h1 class="page-title">💰 Resumen de Anticipos</h1>
+            <p class="page-subtitle">Control general de anticipos del sistema</p>
+        </div>
+        
+        <div id="resumen-loading" class="content-section">
+            <p style="text-align: center; color: #718096;">Cargando resumen de anticipos...</p>
+        </div>
+    `;
+    
+    mainContent.appendChild(section);
+    
+    // Cargar datos
+    await loadResumenAnticipos();
+}
+
+async function loadResumenAnticipos() {
+    try {
+        // Cargar resumen general
+        const resumenResponse = await fetch(`${API_BASE}/api/anticipos/resumen`);
+        const resumenData = await resumenResponse.json();
+        
+        // Cargar órdenes con anticipos
+        const ordenesResponse = await fetch(`${API_BASE}/api/ordenes`);
+        const ordenesData = await ordenesResponse.json();
+        
+        if (!resumenData.success || !ordenesData.success) {
+            showAlert('Error al cargar datos', 'error');
+            return;
+        }
+        
+        const container = document.getElementById('resumen-loading');
+        const { total_anticipos_pagados, total_aplicado, saldo_disponible, ordenes_con_anticipos } = resumenData.data;
+        
+        // Filtrar órdenes que tienen anticipos
+        const ordenesConAnticipos = ordenesData.data.filter(orden => {
+            // Aquí podrías hacer una verificación más específica si necesitas
+            return true; // Por ahora mostramos todas
+        });
+        
+        container.innerHTML = `
+            <!-- ESTADÍSTICAS GENERALES -->
+            <div class="stats-grid" style="margin-bottom: 2rem;">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon green">💰</div>
+                    </div>
+                    <div class="stat-value">$${formatNumber(total_anticipos_pagados)}</div>
+                    <div class="stat-label">Total Anticipos Pagados</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon blue">📊</div>
+                    </div>
+                    <div class="stat-value">$${formatNumber(total_aplicado)}</div>
+                    <div class="stat-label">Total Aplicado</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon yellow">💸</div>
+                    </div>
+                    <div class="stat-value">$${formatNumber(saldo_disponible)}</div>
+                    <div class="stat-label">Saldo Disponible</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon purple">📋</div>
+                    </div>
+                    <div class="stat-value">${ordenes_con_anticipos}</div>
+                    <div class="stat-label">Órdenes con Anticipos</div>
+                </div>
+            </div>
+
+            <!-- LISTA DE ÓRDENES -->
+            <div class="content-section">
+                <h3 style="margin-bottom: 1rem;">📋 Órdenes de Compra - Control de Anticipos</h3>
+                ${ordenesConAnticipos.length > 0 ? `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Orden</th>
+                                <th>Marca</th>
+                                <th>Proveedor</th>
+                                <th>Valor USD</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${ordenesConAnticipos.map(orden => `
+                                <tr>
+                                    <td><strong>${orden.numero_orden}</strong></td>
+                                    <td>
+                                        <span class="status-badge ${orden.marca === 'Verken' ? 'status-pendiente' : 'status-pagada'}">
+                                            ${orden.marca}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        ${orden.proveedores ? orden.proveedores.nombre : 'Sin proveedor'}
+                                        ${orden.proveedores ? `<br><small style="color: #718096;">${orden.proveedores.pais_origen}</small>` : ''}
+                                    </td>
+                                    <td>$${formatNumber(orden.valor_usd)}</td>
+                                    <td>
+                                        <button class="btn btn-primary" onclick="showAnticiposControl('${orden.id}')">
+                                            💰 Gestionar Anticipos
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p style="text-align: center; color: #718096; padding: 2rem;">No hay órdenes de compra registradas</p>'}
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error cargando resumen:', error);
+        showAlert('Error al cargar resumen de anticipos', 'error');
+    }
 }
 
 // =============================================
@@ -2687,6 +2864,473 @@ function validarSumaVencimientos() {
         sumContainer.style.color = '#e53e3e';
     }
 }
+
+// =============================================
+// SISTEMA DE CONTROL DE ANTICIPOS
+// =============================================
+
+// Agregar nueva sección al menú (en el HTML donde están las demás secciones)
+function showAnticiposControl(ordenId) {
+    // Ocultar todas las secciones
+    document.querySelectorAll('.page-section').forEach(section => {
+        section.classList.add('hidden');
+    });
+    
+    // Crear sección dinámica para control de anticipos
+    const mainContent = document.querySelector('.main-content');
+    
+    // Remover sección anterior si existe
+    const existing = document.getElementById('anticipos-control');
+    if (existing) existing.remove();
+    
+    const section = document.createElement('div');
+    section.id = 'anticipos-control';
+    section.className = 'page-section';
+    
+    section.innerHTML = `
+        <div class="page-header">
+            <h1 class="page-title">💰 Control de Anticipos</h1>
+            <p class="page-subtitle">Gestión de anticipos y aplicación a facturas</p>
+        </div>
+        
+        <div id="anticipos-loading" class="content-section">
+            <p style="text-align: center; color: #718096;">Cargando información de anticipos...</p>
+        </div>
+    `;
+    
+    mainContent.appendChild(section);
+    
+    // Cargar datos
+    loadAnticiposControl(ordenId);
+}
+
+async function loadAnticiposControl(ordenId) {
+    try {
+        const response = await fetch(`${API_BASE}/api/ordenes/${ordenId}/anticipos-dashboard`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            showAlert('Error al cargar datos de anticipos', 'error');
+            return;
+        }
+        
+        const container = document.getElementById('anticipos-loading');
+        const { orden, resumen, anticipos_pagados, facturas } = data.data;
+        
+        container.innerHTML = `
+            <!-- RESUMEN GENERAL -->
+            <div class="stats-grid" style="margin-bottom: 2rem;">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon blue">📦</div>
+                    </div>
+                    <div class="stat-value">$${formatNumber(resumen.valor_orden)}</div>
+                    <div class="stat-label">Valor Orden</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon green">💰</div>
+                    </div>
+                    <div class="stat-value">$${formatNumber(resumen.total_anticipos_pagados)}</div>
+                    <div class="stat-label">Anticipos Pagados</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon yellow">📊</div>
+                    </div>
+                    <div class="stat-value">$${formatNumber(resumen.total_anticipo_aplicado)}</div>
+                    <div class="stat-label">Anticipo Aplicado</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon purple">💸</div>
+                    </div>
+                    <div class="stat-value">$${formatNumber(resumen.saldo_anticipo_disponible)}</div>
+                    <div class="stat-label">Saldo Disponible</div>
+                </div>
+            </div>
+
+            <!-- INFORMACIÓN DE LA ORDEN -->
+            <div class="content-section" style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem;">📋 Información de la Orden</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div><strong>Número:</strong> ${orden.numero_orden}</div>
+                    <div><strong>Marca:</strong> ${orden.marca}</div>
+                    <div><strong>Proveedor:</strong> ${orden.proveedores.nombre}</div>
+                    <div><strong>País:</strong> ${orden.proveedores.pais_origen}</div>
+                </div>
+            </div>
+
+            <!-- ANTICIPOS PAGADOS -->
+            <div class="content-section" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>💰 Anticipos Pagados</h3>
+                    <button class="btn btn-primary" onclick="showNuevoAnticipoModal('${ordenId}')">+ Nuevo Anticipo</button>
+                </div>
+                ${anticipos_pagados.length > 0 ? `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Monto</th>
+                                <th>Método</th>
+                                <th>Usuario</th>
+                                <th>Notas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${anticipos_pagados.map(a => `
+                                <tr>
+                                    <td>${new Date(a.fecha_pago).toLocaleDateString()}</td>
+                                    <td><strong>$${formatNumber(a.monto)}</strong></td>
+                                    <td>${a.metodo_pago}</td>
+                                    <td>${a.usuario_pago || '-'}</td>
+                                    <td>${a.notas || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p style="text-align: center; color: #718096;">No hay anticipos registrados</p>'}
+            </div>
+
+            <!-- FACTURAS Y APLICACIÓN DE ANTICIPOS -->
+            <div class="content-section">
+                <h3 style="margin-bottom: 1rem;">📄 Facturas y Aplicación de Anticipos</h3>
+                ${facturas.length > 0 ? `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Factura</th>
+                                <th>Embarque</th>
+                                <th>Monto Total</th>
+                                <th>Anticipo Aplicado</th>
+                                <th>Saldo Pendiente</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${facturas.map(f => `
+                                <tr>
+                                    <td><strong>${f.numero_factura}</strong></td>
+                                    <td>${f.embarques ? f.embarques.numero_embarque : 'N/A'}</td>
+                                    <td>$${formatNumber(f.monto_total)}</td>
+                                    <td>
+                                        <span style="color: #38a169; font-weight: 600;">
+                                            $${formatNumber(f.anticipo_aplicado || 0)}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span style="color: #e53e3e; font-weight: 600;">
+                                            $${formatNumber(f.saldo_pendiente || f.monto_total)}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-primary" onclick="editarAnticipoFactura('${f.id}', ${f.monto_total}, ${f.anticipo_aplicado || 0}, ${resumen.saldo_anticipo_disponible})">
+                                            ✏️ Editar
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                ` : '<p style="text-align: center; color: #718096;">No hay facturas asociadas a esta orden</p>'}
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error cargando anticipos:', error);
+        showAlert('Error al cargar información de anticipos', 'error');
+    }
+}
+
+// Modal para nuevo anticipo
+async function showNuevoAnticipoModal(ordenId) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-simple';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 500px;">
+                <h3 style="margin-bottom: 1.5rem;">💰 Registrar Nuevo Anticipo</h3>
+                <form id="nuevo-anticipo-form">
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Fecha de Pago *</label>
+                        <input type="date" name="fecha_pago" class="form-input" required value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Monto *</label>
+                        <input type="number" name="monto" class="form-input" step="0.01" min="0.01" required>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Método de Pago *</label>
+                        <select name="metodo_pago" class="form-input" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="credito_bancario">Crédito Bancario</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label class="form-label">Usuario que Paga</label>
+                        <input type="text" name="usuario_pago" class="form-input">
+                    </div>
+                    <div style="margin-bottom: 1.5rem;">
+                        <label class="form-label">Notas</label>
+                        <textarea name="notas" class="form-input" rows="3"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                        <button type="submit" class="btn btn-success" style="flex: 1;">Registrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('nuevo-anticipo-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        
+        const data = {
+            orden_compra_id: ordenId,
+            fecha_pago: formData.get('fecha_pago'),
+            monto: parseFloat(formData.get('monto')),
+            metodo_pago: formData.get('metodo_pago'),
+            usuario_pago: formData.get('usuario_pago') || null,
+            notas: formData.get('notas') || null
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/anticipos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert(result.message, 'success');
+                modal.remove();
+                loadAnticiposControl(ordenId); // Recargar
+            } else {
+                showAlert('Error: ' + result.detail, 'error');
+            }
+        } catch (error) {
+            showAlert('Error de conexión', 'error');
+        }
+    });
+}
+
+// Modal para editar anticipo aplicado a factura
+async function editarAnticipoFactura(facturaId, montoTotal, anticipoActual, saldoDisponible) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-simple';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 500px;">
+                <h3 style="margin-bottom: 1.5rem;">✏️ Aplicar Anticipo a Factura</h3>
+                
+                <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div><strong>Monto Total:</strong> $${formatNumber(montoTotal)}</div>
+                    <div><strong>Anticipo Actual:</strong> $${formatNumber(anticipoActual)}</div>
+                    <div><strong>Saldo Disponible:</strong> $${formatNumber(saldoDisponible + anticipoActual)}</div>
+                </div>
+                
+                <form id="editar-anticipo-form">
+                    <div style="margin-bottom: 1.5rem;">
+                        <label class="form-label">Anticipo a Aplicar</label>
+                        <input type="number" name="anticipo_aplicado" class="form-input" step="0.01" 
+                               min="0" max="${saldoDisponible + anticipoActual}" 
+                               value="${anticipoActual}" 
+                               onchange="calcularSaldoFactura(this.value, ${montoTotal})">
+                        <small style="color: #718096;">Máximo: $${formatNumber(Math.min(montoTotal, saldoDisponible + anticipoActual))}</small>
+                    </div>
+                    
+                    <div id="saldo-resultado" style="background: #e6fffa; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                        <strong>Saldo a Pagar: $${formatNumber(montoTotal - anticipoActual)}</strong>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">Aplicar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('editar-anticipo-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        
+        const data = {
+            anticipo_aplicado: parseFloat(formData.get('anticipo_aplicado'))
+        };
+
+        try {
+            const response = await fetch(`${API_BASE}/api/facturas/${facturaId}/aplicar-anticipo`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert(result.message, 'success');
+                modal.remove();
+                // Recargar la página de anticipos (necesitas obtener el ordenId)
+                const facturaResponse = await fetch(`${API_BASE}/api/facturas/${facturaId}`);
+                const facturaData = await facturaResponse.json();
+                if (facturaData.success && facturaData.data.orden_compra_id) {
+                    loadAnticiposControl(facturaData.data.orden_compra_id);
+                }
+            } else {
+                showAlert('Error: ' + result.detail, 'error');
+            }
+        } catch (error) {
+            showAlert('Error de conexión', 'error');
+        }
+    });
+}
+
+function calcularSaldoFactura(anticipo, montoTotal) {
+    const saldo = montoTotal - parseFloat(anticipo || 0);
+    document.getElementById('saldo-resultado').innerHTML = 
+        `<strong>Saldo a Pagar: $${formatNumber(saldo)}</strong>`;
+}
+
+// =============================================
+// HISTORIAL DE PAGOS
+// =============================================
+
+async function loadHistorialPagos() {
+    const container = document.getElementById('historial-pagos-list');
+    container.innerHTML = '<div style="text-align: center; color: #718096;">Cargando historial...</div>';
+    
+    try {
+        // Obtener todas las facturas con sus vencimientos
+        const response = await fetch(`${API_BASE}/api/facturas`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error('Error obteniendo facturas');
+        }
+        
+        let todosPagos = [];
+        
+        // Procesar cada factura y sus vencimientos
+        for (const factura of data.data) {
+            // Obtener vencimientos de esta factura
+            try {
+                const vencResponse = await fetch(`${API_BASE}/api/facturas/${factura.id}/vencimientos`);
+                if (vencResponse.ok) {
+                    const vencData = await vencResponse.json();
+                    
+                    if (vencData.success) {
+                        // Por cada vencimiento que tenga monto_pagado > 0
+                        vencData.data.forEach(vencimiento => {
+                            if (vencimiento.monto_pagado && vencimiento.monto_pagado > 0 && vencimiento.fecha_pago) {
+                                todosPagos.push({
+                                    fecha_pago: vencimiento.fecha_pago,
+                                    monto_pagado: parseFloat(vencimiento.monto_pagado),
+                                    factura_numero: factura.numero_factura,
+                                    numero_cuota: vencimiento.numero_cuota,
+                                    embarque: factura.embarques ? factura.embarques.numero_embarque : 'N/A',
+                                    monto_cuota: vencimiento.monto_cuota,
+                                    estado: vencimiento.estado
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.log(`Error vencimientos factura ${factura.numero_factura}:`, error);
+            }
+        }
+        
+        if (todosPagos.length > 0) {
+            // Ordenar por fecha descendente
+            todosPagos.sort((a, b) => new Date(b.fecha_pago) - new Date(a.fecha_pago));
+            
+            const totalPagado = todosPagos.reduce((sum, pago) => sum + pago.monto_pagado, 0);
+            
+            container.innerHTML = `
+                <div style="background: #f0fff4; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid #38a169;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div><strong>Total Pagos:</strong> ${todosPagos.length}</div>
+                        <div><strong>Monto Total:</strong> $${formatNumber(totalPagado)}</div>
+                        <div><strong>Fuente:</strong> ✅ monto_pagado en vencimientos</div>
+                    </div>
+                </div>
+                
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Fecha Pago</th>
+                            <th>Factura</th>
+                            <th>Embarque</th>
+                            <th>Cuota</th>
+                            <th>Monto Cuota</th>
+                            <th>Monto Pagado</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${todosPagos.map(pago => `
+                            <tr>
+                                <td>${new Date(pago.fecha_pago).toLocaleDateString()}</td>
+                                <td><strong>${pago.factura_numero}</strong></td>
+                                <td>${pago.embarque}</td>
+                                <td>
+                                    <span class="status-badge status-pagada">
+                                        Cuota ${pago.numero_cuota}
+                                    </span>
+                                </td>
+                                <td>$${formatNumber(pago.monto_cuota)}</td>
+                                <td><strong>$${formatNumber(pago.monto_pagado)}</strong></td>
+                                <td>
+                                    <span class="status-badge status-pagada">
+                                        ${pago.estado}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } else {
+            container.innerHTML = `
+                <div style="text-align: center; color: #718096; padding: 2rem;">
+                    <h4>📝 No hay pagos registrados</h4>
+                    <p>No se encontraron vencimientos con monto_pagado > 0</p>
+                    
+                    <div style="background: #f7fafc; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                        <strong>Para registrar pagos:</strong><br>
+                        1. Ve a "Facturas Pendientes"<br>
+                        2. Click "📅" ver vencimientos<br>
+                        3. Click "💳 Pagar Cuota"<br>
+                        4. Los pagos aparecerán aquí automáticamente
+                    </div>
+                </div>
+            `;
+        }
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+        container.innerHTML = `
+            <div style="text-align: center; color: #e53e3e; padding: 2rem;">
+                <h4>❌ Error cargando historial</h4>
+                <p><strong>Error:</strong> ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Agregar botón en la lista de órdenes para acceder al control
+// Modifica la función loadOrdenesCompra existente para agregar el botón:
     
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {

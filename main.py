@@ -1122,6 +1122,190 @@ async def get_pagos_vencimiento(vencimiento_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener pagos: {str(e)}")
 
+
+# =============================================
+# SISTEMA COMPLETO DE CONTROL DE ANTICIPOS
+# =============================================
+
+from typing import Dict, Any
+
+@app.get("/api/ordenes/{orden_id}/anticipos-dashboard")
+async def get_dashboard_anticipos(orden_id: str):
+    """Dashboard completo de anticipos para una orden"""
+    try:
+        # 1. Información de la orden
+        orden_result = supabase.table('ordenes_compra').select("""
+            *,
+            proveedores!ordenes_compra_proveedor_id_fkey (
+                nombre, pais_origen
+            )
+        """).eq('id', orden_id).execute()
+        
+        if not orden_result.data:
+            raise HTTPException(status_code=404, detail="Orden no encontrada")
+        
+        orden = orden_result.data[0]
+        
+        # 2. Anticipos pagados
+        anticipos_result = supabase.table('anticipos_pagados').select("*").eq('orden_compra_id', orden_id).order('fecha_pago', desc=True).execute()
+        total_anticipos = sum(float(a['monto']) for a in anticipos_result.data)
+        
+        # 3. Facturas de la orden con información de embarques
+        facturas_result = supabase.table('facturas').select("""
+            *,
+            embarques!facturas_embarque_id_fkey (
+                numero_embarque, fecha_embarque
+            )
+        """).eq('orden_compra_id', orden_id).order('created_at', desc=True).execute()
+        
+        # 4. Calcular totales
+        total_facturas = sum(float(f['monto_total']) for f in facturas_result.data)
+        total_anticipo_aplicado = sum(float(f.get('anticipo_aplicado', 0)) for f in facturas_result.data)
+        saldo_anticipo_disponible = total_anticipos - total_anticipo_aplicado
+        saldo_total_pendiente = total_facturas - total_anticipo_aplicado
+        
+        return {
+            "success": True,
+            "data": {
+                "orden": orden,
+                "resumen": {
+                    "valor_orden": float(orden['valor_usd']),
+                    "total_anticipos_pagados": total_anticipos,
+                    "total_facturas": total_facturas,
+                    "total_anticipo_aplicado": total_anticipo_aplicado,
+                    "saldo_anticipo_disponible": saldo_anticipo_disponible,
+                    "saldo_total_pendiente": saldo_total_pendiente
+                },
+                "anticipos_pagados": anticipos_result.data,
+                "facturas": facturas_result.data
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.put("/api/facturas/{factura_id}/aplicar-anticipo")
+async def aplicar_anticipo_factura(factura_id: str, request_data: Dict[str, Any]):
+    """Aplicar o modificar anticipo en una factura específica"""
+    try:
+        nuevo_anticipo = float(request_data.get('anticipo_aplicado', 0))
+        
+        # Obtener la factura
+        factura_result = supabase.table('facturas').select("*").eq('id', factura_id).execute()
+        if not factura_result.data:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        
+        factura = factura_result.data[0]
+        orden_id = factura['orden_compra_id']
+        
+        if not orden_id:
+            raise HTTPException(status_code=400, detail="Esta factura no está asociada a una orden de compra")
+        
+        # Validar que no exceda el anticipo disponible
+        anticipos_result = supabase.table('anticipos_pagados').select("monto").eq('orden_compra_id', orden_id).execute()
+        total_anticipos = sum(float(a['monto']) for a in anticipos_result.data)
+        
+        # Anticipo ya aplicado en otras facturas (excluyendo esta)
+        otras_facturas = supabase.table('facturas').select("anticipo_aplicado").eq('orden_compra_id', orden_id).neq('id', factura_id).execute()
+        anticipo_usado_otras = sum(float(f.get('anticipo_aplicado', 0)) for f in otras_facturas.data)
+        
+        anticipo_disponible = total_anticipos - anticipo_usado_otras
+        
+        if nuevo_anticipo > anticipo_disponible:
+            raise HTTPException(status_code=400, detail=f"Anticipo excede disponible: ${anticipo_disponible:.2f}")
+        
+        # Validar que no exceda el monto total de la factura
+        monto_total = float(factura['monto_total'])
+        if nuevo_anticipo > monto_total:
+            raise HTTPException(status_code=400, detail=f"Anticipo no puede exceder monto total: ${monto_total:.2f}")
+        
+        # Calcular nuevo saldo pendiente
+        nuevo_saldo = monto_total - nuevo_anticipo
+        
+        # Actualizar factura
+        update_result = supabase.table('facturas').update({
+            "anticipo_aplicado": nuevo_anticipo,
+            "saldo_pendiente": nuevo_saldo
+        }).eq('id', factura_id).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Anticipo aplicado: ${nuevo_anticipo:.2f}",
+            "data": update_result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+class NuevoAnticipoCreate(BaseModel):
+    orden_compra_id: str
+    fecha_pago: date
+    monto: float
+    metodo_pago: str
+    usuario_pago: Optional[str] = None
+    notas: Optional[str] = None
+
+@app.post("/api/anticipos")
+async def registrar_nuevo_anticipo(anticipo: NuevoAnticipoCreate):
+    """Registrar un nuevo anticipo a una orden"""
+    try:
+        # Verificar que la orden existe
+        orden_result = supabase.table('ordenes_compra').select('id').eq('id', anticipo.orden_compra_id).execute()
+        if not orden_result.data:
+            raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
+        
+        if anticipo.monto <= 0:
+            raise HTTPException(status_code=400, detail="El monto debe ser mayor a 0")
+        
+        # Insertar anticipo
+        insert_result = supabase.table('anticipos_pagados').insert({
+            "orden_compra_id": anticipo.orden_compra_id,
+            "fecha_pago": anticipo.fecha_pago.isoformat(),
+            "monto": anticipo.monto,
+            "metodo_pago": anticipo.metodo_pago,
+            "usuario_pago": anticipo.usuario_pago,
+            "notas": anticipo.notas
+        }).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Anticipo de ${anticipo.monto:.2f} registrado exitosamente",
+            "data": insert_result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/anticipos/resumen")
+async def get_resumen_anticipos():
+    """Resumen general de anticipos del sistema"""
+    try:
+        # Anticipos totales
+        anticipos_result = supabase.table('anticipos_pagados').select("monto, orden_compra_id").execute()
+        total_anticipos = sum(float(a['monto']) for a in anticipos_result.data)
+        
+        # Anticipos aplicados
+        facturas_result = supabase.table('facturas').select("anticipo_aplicado").execute()
+        total_aplicado = sum(float(f.get('anticipo_aplicado', 0)) for f in facturas_result.data)
+        
+        # Saldo disponible
+        saldo_disponible = total_anticipos - total_aplicado
+        
+        return {
+            "success": True,
+            "data": {
+                "total_anticipos_pagados": total_anticipos,
+                "total_aplicado": total_aplicado,
+                "saldo_disponible": saldo_disponible,
+                "ordenes_con_anticipos": len(set(a['orden_compra_id'] for a in anticipos_result.data if a['orden_compra_id']))
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
 # =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
 # =============================================
