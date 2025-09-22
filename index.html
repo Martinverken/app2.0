@@ -868,19 +868,160 @@
         }
 
         // Cargar estadísticas
-        async function loadStats() {
-            try {
-                const response = await fetch(`${API_BASE}/api/stats`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Actualizar estadísticas básicas
-                    // Por ahora solo tenemos proveedores funcionando
-                }
-            } catch (error) {
-                console.error('Error cargando estadísticas:', error);
+        // =============================================
+// DASHBOARD FINANCIERO COMPLETO
+// =============================================
+
+async function loadStats() {
+    try {
+        // Obtener datos de todas las fuentes
+        const [
+            proveedoresRes,
+            ordenesRes,
+            embarquesRes,
+            facturasRes,
+            costosFijosRes,
+            otrosCostosRes
+        ] = await Promise.all([
+            fetch(`${API_BASE}/api/proveedores`),
+            fetch(`${API_BASE}/api/ordenes`),
+            fetch(`${API_BASE}/api/embarques`),
+            fetch(`${API_BASE}/api/facturas`),
+            fetch(`${API_BASE}/api/costos-fijos`),
+            fetch(`${API_BASE}/api/otros-costos`)
+        ]);
+
+        // Procesar respuestas
+        const proveedores = await proveedoresRes.json();
+        const ordenes = await ordenesRes.json();
+        const embarques = await embarquesRes.json();
+        const facturas = await facturasRes.json();
+        const costosFijos = await costosFijosRes.json();
+        const otrosCostos = await otrosCostosRes.json();
+
+        // Calcular estadísticas
+        const stats = calcularEstadisticasFinancieras({
+            proveedores: proveedores.success ? proveedores.data : [],
+            ordenes: ordenes.success ? ordenes.data : [],
+            embarques: embarques.success ? embarques.data : [],
+            facturas: facturas.success ? facturas.data : [],
+            costosFijos: costosFijos.success ? costosFijos.data : [],
+            otrosCostos: otrosCostos.success ? otrosCostos.data : []
+        });
+
+        // Actualizar las tarjetas del dashboard
+        actualizarTarjetasStats(stats);
+
+    } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+        mostrarErrorStats();
+    }
+}
+
+function calcularEstadisticasFinancieras(data) {
+    const stats = {
+        // Básicas
+        totalProveedores: data.proveedores.length,
+        totalOrdenes: data.ordenes.length,
+        totalEmbarques: data.embarques.length,
+        totalFacturas: data.facturas.length,
+        
+        // Financieras
+        valorTotalOrdenes: 0,
+        totalAnticiposPagados: 0,
+        totalFacturasPendientes: 0,
+        totalFacturasPagadas: 0,
+        costosFijosMensuales: 0,
+        otrosCostosTotal: 0,
+        
+        // Conteos detallados
+        facturasPendientes: 0,
+        facturasPagadas: 0,
+        ordenesActivas: 0,
+        embarquesEnTransito: 0,
+        
+        // Proyecciones
+        flujoNetoMes: 0,
+        saldoPendienteTotal: 0
+    };
+
+    // Calcular órdenes
+    if (data.ordenes.length > 0) {
+        stats.valorTotalOrdenes = data.ordenes.reduce((sum, orden) => sum + parseFloat(orden.valor_usd || 0), 0);
+        stats.totalAnticiposPagados = data.ordenes.reduce((sum, orden) => sum + parseFloat(orden.monto_anticipo_pagado || 0), 0);
+        stats.ordenesActivas = data.ordenes.filter(o => o.estado !== 'completada').length;
+    }
+
+    // Calcular facturas
+    if (data.facturas.length > 0) {
+        data.facturas.forEach(factura => {
+            const monto = parseFloat(factura.monto_total || 0);
+            const saldo = parseFloat(factura.saldo_pendiente || monto);
+            
+            if (factura.estado === 'pagada_completa') {
+                stats.facturasPagadas++;
+                stats.totalFacturasPagadas += monto;
+            } else {
+                stats.facturasPendientes++;
+                stats.totalFacturasPendientes += saldo;
+                stats.saldoPendienteTotal += saldo;
             }
-        }
+        });
+    }
+
+    // Calcular costos fijos mensuales
+    if (data.costosFijos.length > 0) {
+        data.costosFijos.forEach(costo => {
+            if (costo.activo) {
+                const monto = parseFloat(costo.monto || 0);
+                if (costo.frecuencia === 'mensual') {
+                    stats.costosFijosMensuales += monto;
+                } else if (costo.frecuencia === 'trimestral') {
+                    stats.costosFijosMensuales += monto / 3;
+                } else if (costo.frecuencia === 'anual') {
+                    stats.costosFijosMensuales += monto / 12;
+                }
+            }
+        });
+    }
+
+    // Calcular otros costos (último mes)
+    if (data.otrosCostos.length > 0) {
+        const unMesAtras = new Date();
+        unMesAtras.setMonth(unMesAtras.getMonth() - 1);
+        
+        stats.otrosCostosTotal = data.otrosCostos
+            .filter(costo => new Date(costo.fecha) >= unMesAtras)
+            .reduce((sum, costo) => sum + parseFloat(costo.monto || 0), 0);
+    }
+
+    // Calcular embarques en tránsito
+    if (data.embarques.length > 0) {
+        stats.embarquesEnTransito = data.embarques.filter(e => 
+            e.estado === 'en_transito' || !e.fecha_llegada_real
+        ).length;
+    }
+
+    // Calcular flujo neto estimado del mes
+    stats.flujoNetoMes = stats.totalFacturasPagadas - stats.costosFijosMensuales - stats.otrosCostosTotal;
+
+    return stats;
+}
+
+function actualizarTarjetasStats(stats) {
+    // Actualizar tarjetas principales
+    document.getElementById('total-facturas-pendientes').textContent = stats.facturasPendientes;
+    document.getElementById('total-facturas-pagadas').textContent = stats.facturasPagadas;
+    document.getElementById('total-costos-fijos').textContent = `$${formatNumber(stats.costosFijosMensuales)}`;
+    document.getElementById('flujo-neto-mes').textContent = `$${formatNumber(stats.flujoNetoMes)}`;
+}
+
+function mostrarErrorStats() {
+    document.getElementById('total-facturas-pendientes').textContent = '?';
+    document.getElementById('total-facturas-pagadas').textContent = '?';
+    document.getElementById('total-costos-fijos').textContent = '$?';
+    document.getElementById('flujo-neto-mes').textContent = '$?';
+}
 
         // Cargar datos específicos de cada sección
         function loadSectionData(sectionId) {
@@ -921,24 +1062,132 @@
 
         // Cargar actividad reciente
         async function loadActividadReciente() {
-            const container = document.getElementById('actividad-reciente');
+    const container = document.getElementById('actividad-reciente');
+    
+    try {
+        // Obtener actividad real de diferentes fuentes
+        const actividades = [];
+        
+        // Obtener facturas recientes
+        const facturasRes = await fetch(`${API_BASE}/api/facturas`);
+        if (facturasRes.ok) {
+            const facturasData = await facturasRes.json();
+            if (facturasData.success) {
+                const facturasRecientes = facturasData.data
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .slice(0, 2);
+                
+                facturasRecientes.forEach(factura => {
+                    actividades.push({
+                        tipo: 'factura',
+                        icono: '🧾',
+                        titulo: `Nueva factura: ${factura.numero_factura}`,
+                        descripcion: `${factura.tipo_factura} - $${formatNumber(factura.monto_total)} ${factura.moneda}`,
+                        fecha: factura.created_at,
+                        color: '#3182ce'
+                    });
+                });
+            }
+        }
+        
+        // Obtener órdenes recientes
+        const ordenesRes = await fetch(`${API_BASE}/api/ordenes`);
+        if (ordenesRes.ok) {
+            const ordenesData = await ordenesRes.json();
+            if (ordenesData.success) {
+                const ordenesRecientes = ordenesData.data
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .slice(0, 2);
+                
+                ordenesRecientes.forEach(orden => {
+                    actividades.push({
+                        tipo: 'orden',
+                        icono: '🛒',
+                        titulo: `Nueva orden: ${orden.numero_orden}`,
+                        descripcion: `${orden.marca} - ${orden.proveedores ? orden.proveedores.nombre : 'Sin proveedor'} - $${formatNumber(orden.valor_usd)} USD`,
+                        fecha: orden.created_at,
+                        color: '#38a169'
+                    });
+                });
+            }
+        }
+        
+        // Obtener embarques recientes
+        const embarquesRes = await fetch(`${API_BASE}/api/embarques`);
+        if (embarquesRes.ok) {
+            const embarquesData = await embarquesRes.json();
+            if (embarquesData.success) {
+                const embarquesRecientes = embarquesData.data
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .slice(0, 1);
+                
+                embarquesRecientes.forEach(embarque => {
+                    actividades.push({
+                        tipo: 'embarque',
+                        icono: '🚢',
+                        titulo: `Embarque: ${embarque.numero_embarque}`,
+                        descripcion: `Estado: ${embarque.estado || 'en_transito'}`,
+                        fecha: embarque.created_at,
+                        color: '#d69e2e'
+                    });
+                });
+            }
+        }
+        
+        // Ordenar por fecha y mostrar las 5 más recientes
+        actividades.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        const actividadesRecientes = actividades.slice(0, 5);
+        
+        if (actividadesRecientes.length > 0) {
             container.innerHTML = `
                 <div style="space-y: 1rem;">
-                    <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid #38a169;">
-                        <div style="font-weight: 600; color: #2d3748;">✅ Pago registrado</div>
-                        <div style="color: #718096; font-size: 0.875rem;">Factura FACT-001 - $2,500 USD - Hace 2 horas</div>
-                    </div>
-                    <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid #3182ce;">
-                        <div style="font-weight: 600; color: #2d3748;">🛒 Nueva orden de compra</div>
-                        <div style="color: #718096; font-size: 0.875rem;">OC-001 - Proveedor China A - Hace 4 horas</div>
-                    </div>
-                    <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid #d69e2e;">
-                        <div style="font-weight: 600; color: #2d3748;">🚢 Embarque actualizado</div>
-                        <div style="color: #718096; font-size: 0.875rem;">EMB-001 - Estado: En tránsito - Hace 6 horas</div>
-                    </div>
+                    ${actividadesRecientes.map(actividad => `
+                        <div style="padding: 1rem; background: #f7fafc; border-radius: 8px; border-left: 4px solid ${actividad.color}; margin-bottom: 1rem;">
+                            <div style="font-weight: 600; color: #2d3748;">${actividad.icono} ${actividad.titulo}</div>
+                            <div style="color: #718096; font-size: 0.875rem;">${actividad.descripcion}</div>
+                            <div style="color: #a0aec0; font-size: 0.75rem; margin-top: 0.25rem;">
+                                ${timeAgo(actividad.fecha)}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div style="text-align: center; color: #718096; padding: 2rem;">
+                    <p>🔄 No hay actividad reciente</p>
+                    <p style="font-size: 0.875rem;">La actividad aparecerá cuando crees facturas, órdenes o embarques</p>
                 </div>
             `;
         }
+        
+    } catch (error) {
+        console.error('Error cargando actividad:', error);
+        container.innerHTML = `
+            <div style="text-align: center; color: #e53e3e; padding: 2rem;">
+                <p>❌ Error cargando actividad reciente</p>
+            </div>
+        `;
+    }
+}
+
+// Función auxiliar para mostrar tiempo relativo
+function timeAgo(dateString) {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diffInMinutes = Math.floor((now - past) / 60000);
+    
+    if (diffInMinutes < 1) return 'Ahora mismo';
+    if (diffInMinutes < 60) return `Hace ${diffInMinutes} minutos`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `Hace ${diffInHours} horas`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `Hace ${diffInDays} días`;
+    
+    return past.toLocaleDateString();
+}
 
         // =============================================
 // CARGAR FACTURAS CON VENCIMIENTOS
@@ -1238,7 +1487,14 @@
 
         // Cargar costos fijos
         async function loadCostosFijos() {
-            const container = document.getElementById('costos-fijos-list');
+    const container = document.getElementById('costos-fijos-list');
+    container.innerHTML = '<div class="loading">Cargando costos fijos...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/costos-fijos`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
             container.innerHTML = `
                 <table class="table">
                     <thead>
@@ -1246,25 +1502,56 @@
                             <th>Concepto</th>
                             <th>Monto</th>
                             <th>Frecuencia</th>
-                            <th>Próximo Pago</th>
+                            <th>Categoría</th>
+                            <th>Fecha Inicio</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td colspan="6" style="text-align: center; color: #718096; padding: 2rem;">
-                                No hay costos fijos registrados
-                            </td>
-                        </tr>
+                        ${data.data.map(costo => `
+                            <tr>
+                                <td><strong>${costo.nombre_costo}</strong></td>
+                                <td>$${formatNumber(costo.monto)}</td>
+                                <td>
+                                    <span class="status-badge status-${costo.frecuencia}">
+                                        ${costo.frecuencia}
+                                    </span>
+                                </td>
+                                <td>${costo.categoria || '-'}</td>
+                                <td>${costo.fecha_inicio ? new Date(costo.fecha_inicio).toLocaleDateString() : '-'}</td>
+                                <td>
+                                    <span class="status-badge ${costo.activo ? 'status-pagada' : 'status-pendiente'}">
+                                        ${costo.activo ? 'Activo' : 'Inactivo'}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-danger" onclick="deleteCostoFijo('${costo.id}', '${costo.nombre_costo}')">🗑️</button>
+                                </td>
+                            </tr>
+                        `).join('')}
                     </tbody>
                 </table>
             `;
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay costos fijos registrados</p>';
         }
+    } catch (error) {
+        console.error('Error cargando costos fijos:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar costos fijos</p>';
+    }
+}
 
         // Cargar otros costos
         async function loadOtrosCostos() {
-            const container = document.getElementById('otros-costos-list');
+    const container = document.getElementById('otros-costos-list');
+    container.innerHTML = '<div class="loading">Cargando otros costos...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/otros-costos`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
             container.innerHTML = `
                 <table class="table">
                     <thead>
@@ -1272,49 +1559,33 @@
                             <th>Fecha</th>
                             <th>Concepto</th>
                             <th>Monto</th>
-                            <th>Categoría</th>
-                            <th>Usuario</th>
+                            <th>Notas</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td colspan="6" style="text-align: center; color: #718096; padding: 2rem;">
-                                No hay otros costos registrados
-                            </td>
-                        </tr>
+                        ${data.data.map(costo => `
+                            <tr>
+                                <td>${new Date(costo.fecha).toLocaleDateString()}</td>
+                                <td><strong>${costo.concepto}</strong></td>
+                                <td>$${formatNumber(costo.monto)}</td>
+                                <td>${costo.notas || '-'}</td>
+                                <td>
+                                    <button class="btn btn-danger" onclick="deleteOtroCosto('${costo.id}', '${costo.concepto}')">🗑️</button>
+                                </td>
+                            </tr>
+                        `).join('')}
                     </tbody>
                 </table>
             `;
+        } else {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay otros costos registrados</p>';
         }
-
-
-        // Cargar embarques
-        async function loadEmbarques() {
-            const container = document.getElementById('embarques-list');
-            container.innerHTML = `
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Número</th>
-                            <th>Fecha Embarque</th>
-                            <th>Fecha Llegada</th>
-                            <th>Total</th>
-                            <th>Facturas</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="7" style="text-align: center; color: #718096; padding: 2rem;">
-                                No hay embarques registrados
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            `;
-        }
+    } catch (error) {
+        console.error('Error cargando otros costos:', error);
+        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar otros costos</p>';
+    }
+}
 
         // Cargar flujo de caja
         async function loadFlujoCaja() {
@@ -1840,13 +2111,15 @@ Anticipo: $${orden.monto_anticipo_pagado || 0}
 // Cargar embarques
 async function loadEmbarques() {
     const container = document.getElementById('embarques-list');
-    container.innerHTML = '<div class="loading">Cargando embarques...</div>';
+    container.innerHTML = '<div style="text-align: center; color: #718096;">Cargando embarques...</div>';
     
     try {
         const response = await fetch(`${API_BASE}/api/embarques`);
         const data = await response.json();
         
-        if (data.success && data.data.length > 0) {
+        console.log('Datos de embarques:', data); // Para debug
+        
+        if (data.success && data.data && data.data.length > 0) {
             container.innerHTML = `
                 <table class="table">
                     <thead>
@@ -1857,6 +2130,7 @@ async function loadEmbarques() {
                             <th>Llegada Real</th>
                             <th>Estado</th>
                             <th>Total</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1872,17 +2146,31 @@ async function loadEmbarques() {
                                     </span>
                                 </td>
                                 <td>$${formatNumber(embarque.total_embarque || 0)}</td>
+                                <td>
+                                    <button class="btn btn-danger" onclick="deleteEmbarque('${embarque.id}', '${embarque.numero_embarque}')">🗑️ Eliminar</button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             `;
         } else {
-            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 2rem;">No hay embarques registrados</p>';
+            container.innerHTML = `
+                <div style="text-align: center; color: #718096; padding: 2rem;">
+                    <h4>📦 No hay embarques registrados</h4>
+                    <p>Crea tu primer embarque usando el botón "+ Nuevo Embarque"</p>
+                </div>
+            `;
         }
     } catch (error) {
         console.error('Error cargando embarques:', error);
-        container.innerHTML = '<p style="text-align: center; color: #e53e3e; padding: 2rem;">Error al cargar embarques</p>';
+        container.innerHTML = `
+            <div style="text-align: center; color: #e53e3e; padding: 2rem;">
+                <h4>❌ Error al cargar embarques</h4>
+                <p>Error: ${error.message}</p>
+                <button class="btn btn-primary" onclick="loadEmbarques()">🔄 Reintentar</button>
+            </div>
+        `;
     }
 }
 
@@ -1985,6 +2273,7 @@ async function loadCostosFijos() {
                             <th>Categoría</th>
                             <th>Fecha Inicio</th>
                             <th>Estado</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2003,6 +2292,9 @@ async function loadCostosFijos() {
                                     <span class="status-badge ${costo.activo ? 'status-pagada' : 'status-pendiente'}">
                                         ${costo.activo ? 'Activo' : 'Inactivo'}
                                     </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-danger" onclick="deleteCostoFijo('${costo.id}', '${costo.nombre_costo}')">🗑️</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -2136,6 +2428,7 @@ async function loadOtrosCostos() {
                             <th>Concepto</th>
                             <th>Monto</th>
                             <th>Notas</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2145,6 +2438,9 @@ async function loadOtrosCostos() {
                                 <td><strong>${costo.concepto}</strong></td>
                                 <td>$${formatNumber(costo.monto)}</td>
                                 <td>${costo.notas || '-'}</td>
+                                <td>
+                                    <button class="btn btn-danger" onclick="deleteOtroCosto('${costo.id}', '${costo.concepto}')">🗑️</button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -3327,6 +3623,62 @@ async function loadHistorialPagos() {
             </div>
         `;
     }
+}
+
+
+// =============================================
+// FUNCIONES DE ELIMINACIÓN UNIVERSALES
+// =============================================
+
+async function eliminarItem(tipo, id, nombre, reloadFunction) {
+    if (!confirm(`¿Estás seguro de eliminar "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/${tipo}/${id}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert(result.message, 'success');
+            reloadFunction(); // Recargar la lista
+        } else {
+            showAlert('Error: ' + result.detail, 'error');
+        }
+    } catch (error) {
+        showAlert('Error de conexión', 'error');
+    }
+}
+
+// =============================================
+// FUNCIONES ESPECÍFICAS PARA CADA TABLA
+// =============================================
+
+function deleteFactura(facturaId, numeroFactura) {
+    eliminarItem('facturas', facturaId, `Factura ${numeroFactura}`, loadFacturasPendientes);
+}
+
+function deleteCostoFijo(costoId, nombreCosto) {
+    eliminarItem('costos-fijos', costoId, `Costo Fijo: ${nombreCosto}`, loadCostosFijos);
+}
+
+function deleteOtroCosto(movimientoId, concepto) {
+    eliminarItem('otros-costos', movimientoId, `Otro Costo: ${concepto}`, loadOtrosCostos);
+}
+
+function deleteOrden(ordenId, numeroOrden) {
+    eliminarItem('ordenes', ordenId, `Orden ${numeroOrden}`, loadOrdenesCompra);
+}
+
+function deleteEmbarque(embarqueId, numeroEmbarque) {
+    eliminarItem('embarques', embarqueId, `Embarque ${numeroEmbarque}`, loadEmbarques);
+}
+
+function deleteProveedor(proveedorId, nombreProveedor) {
+    eliminarItem('proveedores', proveedorId, `Proveedor: ${nombreProveedor}`, loadProveedores);
 }
 
 // Agregar botón en la lista de órdenes para acceder al control

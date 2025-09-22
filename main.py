@@ -1306,6 +1306,225 @@ async def get_resumen_anticipos():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+
+@app.get("/api/pagos-facturas")
+async def get_todos_pagos_facturas():
+    """Obtener todos los pagos de facturas para historial"""
+    try:
+        result = supabase.table('pagos_facturas').select("*").order('fecha_pago', desc=True).execute()
+        
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/facturas-vencimientos/{vencimiento_id}")
+async def get_vencimiento_info(vencimiento_id: str):
+    """Obtener información de un vencimiento específico"""
+    try:
+        result = supabase.table('facturas_vencimientos').select("""
+            *,
+            facturas!facturas_vencimientos_factura_id_fkey (
+                numero_factura
+            )
+        """).eq('id', vencimiento_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Vencimiento no encontrado")
+        
+        return {
+            "success": True,
+            "data": result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/historial-pagos-completo")
+async def get_historial_pagos_completo():
+    """Obtener historial completo de pagos con información de facturas y vencimientos"""
+    try:
+        result = supabase.table('pagos_facturas').select("""
+            *,
+            facturas_vencimientos!pagos_facturas_vencimiento_id_fkey (
+                numero_cuota,
+                monto_cuota,
+                facturas!facturas_vencimientos_factura_id_fkey (
+                    numero_factura,
+                    monto_total
+                )
+            )
+        """).order('fecha_pago', desc=True).execute()
+        
+        # Aplanar la estructura para facilitar el uso en el frontend
+        pagos_formateados = []
+        for pago in result.data:
+            vencimiento = pago.get('facturas_vencimientos')
+            factura = vencimiento.get('facturas') if vencimiento else None
+            
+            pagos_formateados.append({
+                'id': pago['id'],
+                'fecha_pago': pago['fecha_pago'],
+                'monto_pagado': pago['monto_pagado'],
+                'metodo_pago': pago['metodo_pago'],
+                'usuario_pago': pago['usuario_pago'],
+                'notas': pago['notas'],
+                'numero_cuota': vencimiento['numero_cuota'] if vencimiento else None,
+                'numero_factura': factura['numero_factura'] if factura else None,
+                'monto_factura': factura['monto_total'] if factura else None
+            })
+        
+        return {
+            "success": True,
+            "data": pagos_formateados,
+            "total": len(pagos_formateados)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+# =============================================
+# ENDPOINTS DE ELIMINACIÓN
+# =============================================
+
+@app.delete("/api/facturas/{factura_id}")
+async def delete_factura(factura_id: str):
+    """Eliminar factura y sus vencimientos"""
+    try:
+        # Verificar si tiene pagos
+        pagos_result = supabase.table('pagos_facturas').select("id").eq('vencimiento_id', f'(SELECT id FROM facturas_vencimientos WHERE factura_id = {factura_id})').limit(1).execute()
+        
+        if pagos_result.data:
+            raise HTTPException(status_code=400, detail="❌ No se puede eliminar: la factura tiene pagos registrados")
+        
+        # Los vencimientos se eliminan automáticamente por CASCADE
+        result = supabase.table('facturas').delete().eq('id', factura_id).execute()
+        
+        return {
+            "success": True,
+            "message": "✅ Factura eliminada exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.delete("/api/costos-fijos/{costo_id}")
+async def delete_costo_fijo(costo_id: str):
+    """Eliminar costo fijo"""
+    try:
+        result = supabase.table('costos_fijos_recurrentes').delete().eq('id', costo_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Costo fijo no encontrado")
+        
+        return {
+            "success": True,
+            "message": "✅ Costo fijo eliminado exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.delete("/api/otros-costos/{movimiento_id}")
+async def delete_otro_costo(movimiento_id: str):
+    """Eliminar otro costo (movimiento de flujo de caja)"""
+    try:
+        result = supabase.table('flujo_caja_movimientos').delete().eq('id', movimiento_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Otro costo no encontrado")
+        
+        return {
+            "success": True,
+            "message": "✅ Otro costo eliminado exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.delete("/api/ordenes/{orden_id}")
+async def delete_orden_compra(orden_id: str):
+    """Eliminar orden de compra"""
+    try:
+        # Verificar si tiene facturas asociadas
+        facturas_result = supabase.table('facturas').select("id").eq('orden_compra_id', orden_id).limit(1).execute()
+        
+        if facturas_result.data:
+            raise HTTPException(status_code=400, detail="❌ No se puede eliminar: la orden tiene facturas asociadas")
+        
+        # Verificar si tiene anticipos
+        anticipos_result = supabase.table('anticipos_pagados').select("id").eq('orden_compra_id', orden_id).limit(1).execute()
+        
+        if anticipos_result.data:
+            raise HTTPException(status_code=400, detail="❌ No se puede eliminar: la orden tiene anticipos pagados")
+        
+        result = supabase.table('ordenes_compra').delete().eq('id', orden_id).execute()
+        
+        return {
+            "success": True,
+            "message": "✅ Orden de compra eliminada exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.delete("/api/embarques/{embarque_id}")
+async def delete_embarque(embarque_id: str):
+    """Eliminar embarque"""
+    try:
+        # Verificar si tiene facturas asociadas
+        facturas_result = supabase.table('facturas').select("id").eq('embarque_id', embarque_id).limit(1).execute()
+        
+        if facturas_result.data:
+            raise HTTPException(status_code=400, detail="❌ No se puede eliminar: el embarque tiene facturas asociadas")
+        
+        result = supabase.table('embarques').delete().eq('id', embarque_id).execute()
+        
+        return {
+            "success": True,
+            "message": "✅ Embarque eliminado exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# El endpoint de proveedores ya existe, pero lo mejoro:
+@app.delete("/api/proveedores/{proveedor_id}")
+async def delete_proveedor_mejorado(proveedor_id: str):
+    """Eliminar proveedor (versión mejorada)"""
+    try:
+        # Verificar si tiene órdenes de compra
+        ordenes_result = supabase.table('ordenes_compra').select("id").eq('proveedor_id', proveedor_id).limit(1).execute()
+        
+        if ordenes_result.data:
+            raise HTTPException(status_code=400, detail="❌ No se puede eliminar: el proveedor tiene órdenes de compra asociadas")
+        
+        # Verificar si tiene facturas directas
+        facturas_result = supabase.table('facturas').select("id").eq('proveedor_id', proveedor_id).limit(1).execute()
+        
+        if facturas_result.data:
+            raise HTTPException(status_code=400, detail="❌ No se puede eliminar: el proveedor tiene facturas asociadas")
+        
+        result = supabase.table('proveedores').delete().eq('id', proveedor_id).execute()
+        
+        return {
+            "success": True,
+            "message": "✅ Proveedor eliminado exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
 # =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
 # =============================================
