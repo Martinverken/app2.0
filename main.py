@@ -1525,6 +1525,172 @@ async def delete_proveedor_mejorado(proveedor_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+
+@app.delete("/api/embarques/{embarque_id}")
+async def delete_embarque(embarque_id: str):
+    """Eliminar embarque"""
+    try:
+        # Verificar si tiene facturas asociadas
+        facturas_result = supabase.table('facturas').select("id").eq('embarque_id', embarque_id).limit(1).execute()
+        
+        if facturas_result.data:
+            raise HTTPException(status_code=400, detail="❌ No se puede eliminar: el embarque tiene facturas asociadas")
+        
+        result = supabase.table('embarques').delete().eq('id', embarque_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Embarque no encontrado")
+        
+        return {
+            "success": True,
+            "message": "✅ Embarque eliminado exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# =============================================
+# MODELOS ACTUALIZADOS PARA PUERTOS
+# =============================================
+
+class ProveedorCreateWithPuertos(BaseModel):
+    nombre: str
+    pais_origen: str
+    contacto: Optional[str] = None
+    puertos_ids: Optional[List[str]] = []  # Lista de IDs de puertos
+
+class ProveedorUpdateWithPuertos(BaseModel):
+    nombre: Optional[str] = None
+    pais_origen: Optional[str] = None
+    contacto: Optional[str] = None
+    puertos_ids: Optional[List[str]] = None
+
+# =============================================
+# ENDPOINTS PARA PUERTOS
+# =============================================
+
+@app.get("/api/puertos")
+async def get_puertos():
+    """Obtener todos los puertos disponibles"""
+    try:
+        result = supabase.table('puertos').select("*").order('nombre').execute()
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener puertos: {str(e)}")
+
+# =============================================
+# ENDPOINTS ACTUALIZADOS DE PROVEEDORES
+# =============================================
+
+@app.get("/api/proveedores")
+async def get_proveedores_with_puertos():
+    """Obtener proveedores con sus puertos"""
+    try:
+        # Obtener proveedores
+        proveedores_result = supabase.table('proveedores').select("*").order('created_at', desc=True).execute()
+        
+        # Para cada proveedor, obtener sus puertos
+        for proveedor in proveedores_result.data:
+            puertos_result = supabase.table('proveedores_puertos').select("""
+                puertos!proveedores_puertos_puerto_id_fkey (
+                    id, nombre, pais
+                )
+            """).eq('proveedor_id', proveedor['id']).execute()
+            
+            proveedor['puertos'] = [p['puertos'] for p in puertos_result.data]
+        
+        return {
+            "success": True,
+            "data": proveedores_result.data,
+            "total": len(proveedores_result.data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.post("/api/proveedores")
+async def create_proveedor_with_puertos(proveedor: ProveedorCreateWithPuertos):
+    """Crear proveedor con puertos"""
+    try:
+        if not proveedor.nombre.strip():
+            raise HTTPException(status_code=400, detail="El nombre es requerido")
+        
+        # Crear proveedor
+        proveedor_data = {
+            "nombre": proveedor.nombre.strip(),
+            "pais_origen": proveedor.pais_origen.strip(),
+            "contacto": proveedor.contacto.strip() if proveedor.contacto else None
+        }
+        
+        proveedor_result = supabase.table('proveedores').insert(proveedor_data).execute()
+        proveedor_id = proveedor_result.data[0]['id']
+        
+        # Asociar puertos si los hay
+        if proveedor.puertos_ids:
+            puertos_asociaciones = []
+            for puerto_id in proveedor.puertos_ids:
+                puertos_asociaciones.append({
+                    "proveedor_id": proveedor_id,
+                    "puerto_id": puerto_id
+                })
+            
+            supabase.table('proveedores_puertos').insert(puertos_asociaciones).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Proveedor '{proveedor.nombre}' creado exitosamente",
+            "data": proveedor_result.data[0]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.put("/api/proveedores/{proveedor_id}")
+async def update_proveedor_with_puertos(proveedor_id: str, proveedor: ProveedorUpdateWithPuertos):
+    """Actualizar proveedor con puertos"""
+    try:
+        # Actualizar datos básicos
+        update_data = {}
+        if proveedor.nombre is not None:
+            update_data["nombre"] = proveedor.nombre.strip()
+        if proveedor.pais_origen is not None:
+            update_data["pais_origen"] = proveedor.pais_origen.strip()
+        if proveedor.contacto is not None:
+            update_data["contacto"] = proveedor.contacto.strip() if proveedor.contacto else None
+        
+        if update_data:
+            supabase.table('proveedores').update(update_data).eq('id', proveedor_id).execute()
+        
+        # Actualizar puertos si se especificaron
+        if proveedor.puertos_ids is not None:
+            # Eliminar asociaciones existentes
+            supabase.table('proveedores_puertos').delete().eq('proveedor_id', proveedor_id).execute()
+            
+            # Crear nuevas asociaciones
+            if proveedor.puertos_ids:
+                puertos_asociaciones = []
+                for puerto_id in proveedor.puertos_ids:
+                    puertos_asociaciones.append({
+                        "proveedor_id": proveedor_id,
+                        "puerto_id": puerto_id
+                    })
+                
+                supabase.table('proveedores_puertos').insert(puertos_asociaciones).execute()
+        
+        return {
+            "success": True,
+            "message": "✅ Proveedor actualizado exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
 # =============================================
 # ACTUALIZAR ENDPOINT DE STATS GENERAL
 # =============================================

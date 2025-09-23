@@ -827,45 +827,51 @@
 
         // Cargar datos de proveedores
         async function loadProveedores() {
-            try {
-                const response = await fetch(`${API_BASE}/api/proveedores`);
-                const data = await response.json();
-                
-                const container = document.getElementById('proveedores-list');
-                
-                if (data.success && data.data.length > 0) {
-                    container.innerHTML = `
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Nombre</th>
-                                    <th>País</th>
-                                    <th>Contacto</th>
-                                    <th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.data.map(proveedor => `
-                                    <tr>
-                                        <td><strong>${proveedor.nombre}</strong></td>
-                                        <td>${proveedor.pais_origen}</td>
-                                        <td>${proveedor.contacto || 'No especificado'}</td>
-                                        <td>
-                                            <button class="btn btn-primary" onclick="editProveedor('${proveedor.id}')">Editar</button>
-                                            <button class="btn btn-danger" onclick="deleteProveedor('${proveedor.id}')">Eliminar</button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    `;
-                } else {
-                    container.innerHTML = '<p style="color: #718096;">No hay proveedores registrados</p>';
-                }
-            } catch (error) {
-                console.error('Error cargando proveedores:', error);
-            }
+    try {
+        const response = await fetch(`${API_BASE}/api/proveedores`);
+        const data = await response.json();
+        
+        const container = document.getElementById('proveedores-list');
+        
+        if (data.success && data.data.length > 0) {
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Zona</th>
+                            <th>Puertos</th>
+                            <th>Contacto</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.data.map(proveedor => `
+                            <tr>
+                                <td><strong>${proveedor.nombre}</strong></td>
+                                <td>${proveedor.pais_origen || 'No especificado'}</td>
+                                <td>
+                                    <span class="status-badge status-pagada">
+                                        ${proveedor.puerto_principal || 'No especificado'}
+                                    </span>
+                                </td>
+                                <td>${proveedor.contacto || '-'}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="editProveedor('${proveedor.id}')" style="margin-right: 0.5rem;">✏️</button>
+                                    <button class="btn btn-danger" onclick="deleteProveedor('${proveedor.id}', '${proveedor.nombre}')">🗑️</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } else {
+            container.innerHTML = '<p style="color: #718096;">No hay proveedores registrados</p>';
         }
+    } catch (error) {
+        console.error('Error cargando proveedores:', error);
+    }
+}
 
         // Cargar estadísticas
         // =============================================
@@ -1594,70 +1600,154 @@ function timeAgo(dateString) {
         }
 
         // Modales y formularios
-        function showNewProveedorModal() {
-            // Crear modal dinámicamente
-            const modal = document.createElement('div');
-            modal.id = 'proveedor-modal';
-            modal.className = 'modal-simple';
-
-            modal.innerHTML = `
-                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
-                    <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 500px;">
-                        <h3 style="margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 600;">Nuevo Proveedor</h3>
-                        <form id="nuevo-proveedor-form">
-                            <div style="margin-bottom: 1rem;">
-                                <label class="form-label">Nombre *</label>
-                                <input type="text" name="nombre" class="form-input" required>
-                            </div>
-                            <div style="margin-bottom: 1rem;">
-                                <label class="form-label">País de Origen *</label>
-                                <input type="text" name="pais_origen" class="form-input" required>
-                            </div>
-                            <div style="margin-bottom: 1.5rem;">
-                                <label class="form-label">Contacto</label>
-                                <input type="text" name="contacto" class="form-input">
-                            </div>
-                            <div style="display: flex; gap: 1rem;">
-                                <button type="button" class="btn" onclick='cerrarModal()' style="flex: 1; background: #718096;">Cancelar</button>
-                                <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Proveedor</button>
-                            </div>
-                        </form>
+        async function showNewProveedorModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-simple';
+    
+    // HTML con país_origen
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; border-radius: 12px; padding: 2rem; width: 90%; max-width: 600px;">
+                <h3 style="margin-bottom: 1.5rem;">Nuevo Proveedor</h3>
+                <form id="nuevo-proveedor-form">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label class="form-label">Nombre *</label>
+                            <input type="text" name="nombre" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="form-label">Zona *</label>
+                            <select name="pais_origen" class="form-input" required>
+                                <option value="">Seleccionar Zona en China...</option>
+                                <option value="Norte">Norte</option>
+                                <option value="Centro Norte">Centro Norte</option>
+                                <option value="Centro">Centro</option>
+                                <option value="Centro Sur">Centro Sur</option>
+                                <option value="Sur">Sur</option>
+                                <option value="No China">No China</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-
-            // Manejar envío del formulario
-            document.getElementById('nuevo-proveedor-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const data = {
-                    nombre: formData.get('nombre'),
-                    pais_origen: formData.get('pais_origen'),
-                    contacto: formData.get('contacto') || null
-                };
-
-                try {
-                    const response = await fetch(`${API_BASE}/api/proveedores`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
-                    });
-
-                    const result = await response.json();
                     
-                    if (result.success) {
-                        modal.remove();
-                        loadProveedores(); // Recargar la lista
-                        showAlert('Proveedor creado exitosamente', 'success');
-                    } else {
-                        showAlert('Error: ' + result.detail, 'error');
-                    }
-                } catch (error) {
-                    showAlert('Error de conexión', 'error');
-                }
-            });
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label class="form-label">Puerto Principal *</label>
+                            <select name="puerto_principal" class="form-input" required id="puerto-select">
+                                <option value="">🔄 Cargando puertos...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Contacto</label>
+                            <input type="text" name="contacto" class="form-input" placeholder="email@ejemplo.com">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn" onclick="cerrarModal()" style="flex: 1; background: #718096;">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">Crear Proveedor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Cargar puertos después de mostrar el modal
+    try {
+        console.log('🔍 Cargando puertos desde:', `${API_BASE}/api/puertos`);
+        const puertosResponse = await fetch(`${API_BASE}/api/puertos`);
+        const puertoSelect = document.getElementById('puerto-select');
+        
+        if (puertosResponse.ok) {
+            const puertosData = await puertosResponse.json();
+            console.log('📦 Puertos recibidos:', puertosData);
+            
+            if (puertosData.success && puertosData.data.length > 0) {
+                puertoSelect.innerHTML = `
+                    <option value="">Seleccionar puerto...</option>
+                    ${puertosData.data.map(puerto => 
+                        `<option value="${puerto.nombre}">${puerto.nombre} (${puerto.pais})</option>`
+                    ).join('')}
+                `;
+            } else {
+                // Puertos de fallback
+                puertoSelect.innerHTML = `
+                    <option value="">Seleccionar puerto...</option>
+                    <option value="Shanghai">Shanghai</option>
+                    <option value="Ningbo">Ningbo</option>
+                    <option value="Qingdao">Qingdao</option>
+                    <option value="Shenzhen">Shenzhen</option>
+                    <option value="HongKong">HongKong</option>
+                    <option value="Tianjin">Tianjin</option>
+                    <option value="Busan">Busan</option>
+                `;
+            }
+        } else {
+            console.log('❌ Error en response puertos:', puertosResponse.status);
+            // Puertos de fallback
+            puertoSelect.innerHTML = `
+                <option value="">Seleccionar puerto...</option>
+                <option value="Shanghai">Shanghai</option>
+                <option value="Ningbo">Ningbo</option>
+                <option value="Qingdao">Qingdao</option>
+                <option value="Shenzhen">Shenzhen</option>
+                <option value="HongKong">HongKong</option>
+                <option value="Tianjin">Tianjin</option>
+                <option value="Busan">Busan</option>
+            `;
         }
+    } catch (error) {
+        console.error('❌ Error cargando puertos:', error);
+        // Puertos de fallback en caso de error
+        document.getElementById('puerto-select').innerHTML = `
+            <option value="">Seleccionar puerto...</option>
+            <option value="Shanghai">Shanghai</option>
+            <option value="Ningbo">Ningbo</option>
+            <option value="Qingdao">Qingdao</option>
+            <option value="Shenzhen">Shenzhen</option>
+            <option value="HongKong">HongKong</option>
+            <option value="Tianjin">Tianjin</option>
+            <option value="Busan">Busan</option>
+        `;
+    }
+
+    // Manejar envío del formulario
+    document.getElementById('nuevo-proveedor-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        
+        const data = {
+            nombre: formData.get('nombre'),
+            pais_origen: formData.get('pais_origen'),  // AGREGADO
+            puerto_principal: formData.get('puerto_principal'),
+            contacto: formData.get('contacto') || null
+        };
+
+        console.log('📤 Enviando datos:', data);
+
+        try {
+            const response = await fetch(`${API_BASE}/api/proveedores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            console.log('📥 Respuesta:', result);
+            
+            if (result.success) {
+                modal.remove();
+                loadProveedores();
+                showAlert(result.message, 'success');
+            } else {
+                showAlert('Error: ' + result.detail, 'error');
+            }
+        } catch (error) {
+            console.error('❌ Error creando proveedor:', error);
+            showAlert('Error de conexión', 'error');
+        }
+    });
+}
 
         // Función para mostrar alertas
         function showAlert(message, type) {
@@ -3253,7 +3343,7 @@ async function loadAnticiposControl(ordenId) {
                     <div><strong>Número:</strong> ${orden.numero_orden}</div>
                     <div><strong>Marca:</strong> ${orden.marca}</div>
                     <div><strong>Proveedor:</strong> ${orden.proveedores.nombre}</div>
-                    <div><strong>País:</strong> ${orden.proveedores.pais_origen}</div>
+                    <div><strong>Zona:</strong> ${orden.proveedores.pais_origen}</div>
                 </div>
             </div>
 
