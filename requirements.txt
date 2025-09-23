@@ -1,5 +1,307 @@
+# =============================================
+# requirements.txt - Dependencias del nuevo backend
+# =============================================
+
+# FastAPI y servidor
 fastapi==0.104.1
-uvicorn==0.24.0
+uvicorn[standard]==0.24.0
+
+# Base de datos
 supabase==2.18.1
+
+# Modelos y validación
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Utilidades
 python-multipart==0.0.6
 python-dotenv==1.0.0
+
+# Fecha y tiempo
+python-dateutil==2.8.2
+
+# Desarrollo (opcional)
+pytest==7.4.3
+httpx==0.25.2
+
+# =============================================
+# .env - Variables de entorno (ejemplo)
+# =============================================
+
+# Supabase
+SUPABASE_URL=https://ponpwlirxrkqduyqhfhf.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvbnB3bGlyeHJrcWR1eXFoZmhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5NzM0MDcsImV4cCI6MjA3MzU0OTQwN30.mwPG4GjJQrNLpD9snPJgEYlMPsDLICyqSl8U8xJqMoA
+
+# App
+APP_NAME="SGF - Sistema de Gestión Financiera"
+APP_VERSION="2.0.0"
+DEBUG=true
+
+# =============================================
+# routers/__init__.py - Inicializador de routers
+# =============================================
+
+# Este archivo hace que routers/ sea un paquete Python
+from .suppliers import router as suppliers_router
+from .purchase_orders import router as purchase_orders_router
+from .invoices import router as invoices_router
+from .shipments import router as shipments_router
+from .advances import router as advances_router
+from .reports import router as reports_router
+
+__all__ = [
+    "suppliers_router",
+    "purchase_orders_router", 
+    "invoices_router",
+    "shipments_router",
+    "advances_router",
+    "reports_router"
+]
+
+# =============================================
+# models/__init__.py - Inicializador de modelos
+# =============================================
+
+from .supplier import Supplier, SupplierCreate, SupplierUpdate
+from .purchase_order import PurchaseOrder, PurchaseOrderCreate, PurchaseOrderUpdate
+from .invoice import Invoice, InvoiceCreate, InvoiceUpdate
+from .advance import AdvancePayment, AdvancePaymentCreate
+
+__all__ = [
+    "Supplier", "SupplierCreate", "SupplierUpdate",
+    "PurchaseOrder", "PurchaseOrderCreate", "PurchaseOrderUpdate", 
+    "Invoice", "InvoiceCreate", "InvoiceUpdate",
+    "AdvancePayment", "AdvancePaymentCreate"
+]
+
+# =============================================
+# test_api.py - Script de pruebas básicas
+# =============================================
+
+#!/usr/bin/env python3
+"""
+Script para probar la nueva API
+Ejecutar: python test_api.py
+"""
+
+import requests
+import json
+from datetime import date
+
+BASE_URL = "http://localhost:8000"
+
+def print_step(step, description):
+    print(f"\n🔍 PASO {step}: {description}")
+    print("-" * 50)
+
+def test_health():
+    print_step(1, "Verificando estado del sistema")
+    try:
+        response = requests.get(f"{BASE_URL}/health")
+        if response.status_code == 200:
+            data = response.json()
+            print("✅ Sistema funcionando")
+            print(f"📊 Proveedores en BD: {data.get('suppliers_count', 0)}")
+            return True
+        else:
+            print(f"❌ Error: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ Error de conexión: {str(e)}")
+        return False
+
+def test_suppliers():
+    print_step(2, "Probando gestión de proveedores")
+    
+    # Crear proveedor de prueba
+    supplier_data = {
+        "nombre": "Proveedor Prueba API v2",
+        "activo": True,
+        "puerto_salida_default": "Shanghai",
+        "contacto": "test@prueba.com",
+        "notas": "Creado por test automatizado"
+    }
+    
+    try:
+        # Crear
+        response = requests.post(f"{BASE_URL}/api/suppliers/", json=supplier_data)
+        if response.status_code == 200:
+            supplier = response.json()['data']
+            print(f"✅ Proveedor creado: {supplier['nombre']}")
+            supplier_id = supplier['id']
+            
+            # Listar
+            response = requests.get(f"{BASE_URL}/api/suppliers/")
+            if response.status_code == 200:
+                suppliers = response.json()
+                print(f"✅ Lista obtenida: {suppliers['total']} proveedores")
+                
+                # Obtener específico
+                response = requests.get(f"{BASE_URL}/api/suppliers/{supplier_id}")
+                if response.status_code == 200:
+                    print("✅ Proveedor específico obtenido")
+                    return supplier_id
+                
+        print(f"❌ Error en prueba de proveedores")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        return None
+
+def test_purchase_orders(supplier_id):
+    print_step(3, "Probando órdenes de compra")
+    
+    if not supplier_id:
+        print("⚠️  Saltando prueba - no hay proveedor")
+        return None
+    
+    po_data = {
+        "supplier_id": supplier_id,
+        "numero_orden": "PO-TEST-001",
+        "moneda": "USD",
+        "total_oc": 5000.00,
+        "fecha": date.today().isoformat(),
+        "estado": "pendiente",
+        "notas": "Orden de prueba"
+    }
+    
+    try:
+        response = requests.post(f"{BASE_URL}/api/purchase-orders/", json=po_data)
+        if response.status_code == 200:
+            po = response.json()['data']
+            print(f"✅ Orden creada: {po['numero_orden']}")
+            return po['id']
+        else:
+            print(f"❌ Error creando orden: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        return None
+
+def test_invoices(supplier_id):
+    print_step(4, "Probando facturas (nueva lógica)")
+    
+    if not supplier_id:
+        print("⚠️  Saltando prueba - no hay proveedor")
+        return None
+    
+    invoice_data = {
+        "supplier_id": supplier_id,
+        "numero_factura": "FACT-TEST-001",
+        "fecha_emision": date.today().isoformat(),
+        "moneda": "USD",
+        "monto_total": 2500.00,
+        "tipo_factura": "producto",
+        "concepto": "Productos de prueba",
+        "notas": "Factura creada por test"
+    }
+    
+    try:
+        response = requests.post(f"{BASE_URL}/api/invoices/", json=invoice_data)
+        if response.status_code == 200:
+            invoice = response.json()['data']
+            print(f"✅ Factura creada: {invoice['numero_factura']}")
+            print(f"   💰 Monto: ${invoice['monto_total']}")
+            print(f"   📊 Saldo pendiente: ${invoice['saldo_pendiente']}")
+            return invoice['id']
+        else:
+            print(f"❌ Error creando factura: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        return None
+
+def test_dashboard():
+    print_step(5, "Probando dashboard de estadísticas")
+    
+    try:
+        response = requests.get(f"{BASE_URL}/api/stats/dashboard")
+        if response.status_code == 200:
+            stats = response.json()['data']
+            print("✅ Dashboard obtenido:")
+            print(f"   📊 Proveedores: {stats['conteos']['suppliers']}")
+            print(f"   🛒 Órdenes: {stats['conteos']['purchase_orders']}")
+            print(f"   🧾 Facturas: {stats['conteos']['invoices']}")
+            print(f"   💰 Total OCs: ${stats['financial']['total_pos_usd']}")
+            print(f"   💸 Saldo pendiente: ${stats['financial']['saldo_pendiente']}")
+            return True
+        else:
+            print(f"❌ Error obteniendo dashboard: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+        return False
+
+def run_all_tests():
+    print("🚀 PROBANDO NUEVA API SGF v2.0")
+    print("=" * 60)
+    
+    # Ejecutar pruebas
+    if not test_health():
+        print("❌ Sistema no disponible")
+        return
+    
+    supplier_id = test_suppliers()
+    po_id = test_purchase_orders(supplier_id)
+    invoice_id = test_invoices(supplier_id)
+    dashboard_ok = test_dashboard()
+    
+    # Resumen
+    print("\n" + "=" * 60)
+    print("📊 RESUMEN DE PRUEBAS")
+    print("=" * 60)
+    
+    print(f"✅ Proveedor: {'OK' if supplier_id else 'FAIL'}")
+    print(f"✅ Orden de Compra: {'OK' if po_id else 'FAIL'}")
+    print(f"✅ Factura: {'OK' if invoice_id else 'FAIL'}")
+    print(f"✅ Dashboard: {'OK' if dashboard_ok else 'FAIL'}")
+    
+    if all([supplier_id, po_id, invoice_id, dashboard_ok]):
+        print("\n🎉 ¡TODAS LAS PRUEBAS PASARON!")
+        print("✅ La nueva API está funcionando correctamente")
+    else:
+        print("\n⚠️  Algunas pruebas fallaron")
+        print("🔧 Revisa los errores específicos")
+
+if __name__ == "__main__":
+    run_all_tests()
+
+# =============================================
+# Instrucciones de instalación
+# =============================================
+
+"""
+INSTRUCCIONES PARA INSTALAR EL NUEVO BACKEND:
+
+1. PREPARAR ENTORNO:
+   mkdir backend_v2
+   cd backend_v2
+   python -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   # o
+   venv\Scripts\activate     # Windows
+
+2. INSTALAR DEPENDENCIAS:
+   pip install -r requirements.txt
+
+3. CONFIGURAR VARIABLES:
+   cp .env.example .env
+   # Editar .env con tus credenciales
+
+4. CREAR ESTRUCTURA DE CARPETAS:
+   mkdir models routers services
+   touch models/__init__.py routers/__init__.py services/__init__.py
+
+5. COPIAR ARCHIVOS:
+   # Copiar todos los archivos .py de los artifacts
+
+6. EJECUTAR:
+   python main.py
+
+7. PROBAR:
+   python test_api.py
+
+8. DOCUMENTACIÓN:
+   Abrir http://localhost:8000/docs
+"""
