@@ -1,0 +1,24 @@
+# Archivos de ambiente
+.env
+.env.local
+.env.production
+PROD-CREDENTIALS.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

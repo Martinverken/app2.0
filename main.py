@@ -32,7 +32,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 # Configuración
-from config import settings
+from settings_new import settings
 from database import init_database
 
 # Routers

@@ -948,6 +948,303 @@ class AnticipoCreate(BaseModel):
     notas: Optional[str] = None
 
 # =============================================
+# MODELOS FLEXIBLES PARA FACTURAS (NUEVOS)
+# =============================================
+
+class FacturaCreateFlexible(BaseModel):
+    numero_factura: str
+    proveedor_id: str  # AHORA OBLIGATORIO
+    embarque_id: Optional[str] = None  # AHORA OPCIONAL
+    orden_compra_id: Optional[str] = None
+    monto_base: float
+    moneda: str
+    iva: Optional[float] = 0
+    monto_total: float
+    tipo_factura: str
+    concepto: Optional[str] = None
+    proveedor_servicio: Optional[str] = None
+    vencimientos: List[VencimientoCreate]
+
+class VincularFacturaEmbarque(BaseModel):
+    factura_id: str
+    monto_asignado: Optional[float] = None  # Para prorrateo
+
+class VincularFacturaOrden(BaseModel):
+    orden_compra_id: str
+
+# =============================================
+# MODELOS FLEXIBLES PARA FACTURAS (NUEVOS)
+# =============================================
+
+class FacturaCreateFlexible(BaseModel):
+    numero_factura: str
+    proveedor_id: str  # AHORA OBLIGATORIO
+    embarque_id: Optional[str] = None  # AHORA OPCIONAL
+    orden_compra_id: Optional[str] = None
+    monto_base: float
+    moneda: str
+    iva: Optional[float] = 0
+    monto_total: float
+    tipo_factura: str
+    concepto: Optional[str] = None
+    proveedor_servicio: Optional[str] = None
+    vencimientos: List[VencimientoCreate]
+
+class VincularFacturaEmbarque(BaseModel):
+    factura_id: str
+    monto_asignado: Optional[float] = None  # Para prorrateo
+
+class VincularFacturaOrden(BaseModel):
+    orden_compra_id: str
+
+# =============================================
+# NUEVOS ENDPOINTS FLEXIBLES
+# =============================================
+
+@app.post("/api/facturas/flexible")
+async def create_factura_flexible(factura: FacturaCreateFlexible):
+    """Crear factura con modelo flexible - solo requiere proveedor"""
+    try:
+        # Validaciones básicas
+        if not factura.numero_factura.strip():
+            raise HTTPException(status_code=400, detail="El número de factura es requerido")
+        
+        if not factura.proveedor_id:
+            raise HTTPException(status_code=400, detail="El proveedor es requerido")
+            
+        if factura.moneda not in ["USD", "CLP"]:
+            raise HTTPException(status_code=400, detail="La moneda debe ser USD o CLP")
+            
+        if factura.tipo_factura not in ["producto", "servicio"]:
+            raise HTTPException(status_code=400, detail="El tipo debe ser 'producto' o 'servicio'")
+        
+        # Validar vencimientos
+        if not factura.vencimientos or len(factura.vencimientos) == 0:
+            raise HTTPException(status_code=400, detail="Debe tener al menos un vencimiento")
+            
+        if len(factura.vencimientos) > 3:
+            raise HTTPException(status_code=400, detail="Máximo 3 vencimientos permitidos")
+        
+        # Validar suma de cuotas
+        suma_cuotas = sum(v.monto_cuota for v in factura.vencimientos)
+        if abs(suma_cuotas - factura.monto_total) > 0.01:
+            raise HTTPException(status_code=400, detail=f"La suma de cuotas ({suma_cuotas}) debe igualar el monto total ({factura.monto_total})")
+        
+        # Verificar que el proveedor existe
+        proveedor_result = supabase.table('proveedores').select('id').eq('id', factura.proveedor_id).execute()
+        if not proveedor_result.data:
+            raise HTTPException(status_code=400, detail="El proveedor especificado no existe")
+        
+        # Verificar embarque si se proporciona
+        if factura.embarque_id:
+            embarque_result = supabase.table('embarques').select('id').eq('id', factura.embarque_id).execute()
+            if not embarque_result.data:
+                raise HTTPException(status_code=400, detail="El embarque especificado no existe")
+        
+        # Verificar orden si se proporciona
+        if factura.orden_compra_id:
+            orden_result = supabase.table('ordenes_compra').select('id').eq('id', factura.orden_compra_id).execute()
+            if not orden_result.data:
+                raise HTTPException(status_code=400, detail="La orden de compra especificada no existe")
+        
+        # Verificar que el número no existe
+        factura_existente = supabase.table('facturas').select('id').eq('numero_factura', factura.numero_factura).execute()
+        if factura_existente.data:
+            raise HTTPException(status_code=400, detail="Ya existe una factura con ese número")
+        
+        # Crear factura principal
+        factura_data = {
+            "numero_factura": factura.numero_factura.strip(),
+            "proveedor_id": factura.proveedor_id,
+            "embarque_id": factura.embarque_id,
+            "orden_compra_id": factura.orden_compra_id,
+            "monto_base": factura.monto_base,
+            "moneda": factura.moneda,
+            "iva": factura.iva,
+            "monto_total": factura.monto_total,
+            "tipo_factura": factura.tipo_factura,
+            "concepto": factura.concepto.strip() if factura.concepto else None,
+            "proveedor_servicio": factura.proveedor_servicio.strip() if factura.proveedor_servicio else None,
+            "estado": "pendiente",
+        }
+        
+        factura_result = supabase.table('facturas').insert(factura_data).execute()
+        factura_id = factura_result.data[0]['id']
+        
+        # Crear vencimientos
+        vencimientos_data = []
+        for venc in factura.vencimientos:
+            vencimientos_data.append({
+                "factura_id": factura_id,
+                "numero_cuota": venc.numero_cuota,
+                "fecha_vencimiento": venc.fecha_vencimiento.isoformat(),
+                "monto_cuota": venc.monto_cuota,
+                "estado": "pendiente"
+            })
+        
+        vencimientos_result = supabase.table('facturas_vencimientos').insert(vencimientos_data).execute()
+        
+        # Si se vinculó a un embarque, crear registro en shipment_invoice
+        if factura.embarque_id:
+            supabase.table('shipment_invoice').insert({
+                "shipment_id": factura.embarque_id,
+                "invoice_id": factura_id,
+                "monto_asignado": factura.monto_total
+            }).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Factura '{factura.numero_factura}' creada exitosamente",
+            "data": {
+                "factura": factura_result.data[0],
+                "vencimientos": vencimientos_result.data
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al crear factura: {str(e)}")
+
+@app.get("/api/facturas/sin-asignar")
+async def get_facturas_sin_asignar():
+    """Obtener facturas que no están asignadas a embarques"""
+    try:
+        result = supabase.table('facturas').select("""
+            *,
+            proveedores!facturas_proveedor_id_fkey (
+                nombre, pais_origen
+            )
+        """).is_('embarque_id', 'null').order('created_at', desc=True).execute()
+        
+        return {
+            "success": True,
+            "data": result.data,
+            "total": len(result.data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.post("/api/embarques/{embarque_id}/facturas")
+async def vincular_factura_a_embarque(embarque_id: str, vincular: VincularFacturaEmbarque):
+    """Vincular una factura existente a un embarque"""
+    try:
+        # Verificar que embarque existe
+        embarque_result = supabase.table('embarques').select('id').eq('id', embarque_id).execute()
+        if not embarque_result.data:
+            raise HTTPException(status_code=404, detail="Embarque no encontrado")
+        
+        # Verificar que factura existe
+        factura_result = supabase.table('facturas').select('*').eq('id', vincular.factura_id).execute()
+        if not factura_result.data:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        
+        factura = factura_result.data[0]
+        
+        # Verificar que la factura no esté ya vinculada a este embarque
+        vinculo_existente = supabase.table('shipment_invoice').select('id').eq('shipment_id', embarque_id).eq('invoice_id', vincular.factura_id).execute()
+        if vinculo_existente.data:
+            raise HTTPException(status_code=400, detail="La factura ya está vinculada a este embarque")
+        
+        # Crear vinculación en shipment_invoice
+        monto_asignado = vincular.monto_asignado or factura['monto_total']
+        
+        supabase.table('shipment_invoice').insert({
+            "shipment_id": embarque_id,
+            "invoice_id": vincular.factura_id,
+            "monto_asignado": monto_asignado
+        }).execute()
+        
+        # Actualizar embarque_id en la factura (para compatibilidad)
+        if not factura['embarque_id']:
+            supabase.table('facturas').update({
+                "embarque_id": embarque_id
+            }).eq('id', vincular.factura_id).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Factura vinculada al embarque exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.post("/api/facturas/{factura_id}/link-oc")
+async def vincular_factura_a_orden(factura_id: str, vincular: VincularFacturaOrden):
+    """Vincular una factura existente a una orden de compra"""
+    try:
+        # Verificar que factura existe
+        factura_result = supabase.table('facturas').select('*').eq('id', factura_id).execute()
+        if not factura_result.data:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+        
+        # Verificar que orden existe
+        orden_result = supabase.table('ordenes_compra').select('*').eq('id', vincular.orden_compra_id).execute()
+        if not orden_result.data:
+            raise HTTPException(status_code=404, detail="Orden de compra no encontrada")
+        
+        # Actualizar factura
+        supabase.table('facturas').update({
+            "orden_compra_id": vincular.orden_compra_id
+        }).eq('id', factura_id).execute()
+        
+        return {
+            "success": True,
+            "message": f"✅ Factura vinculada a la orden exitosamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/embarques/{embarque_id}/facturas")
+async def get_facturas_por_embarque(embarque_id: str):
+    """Obtener todas las facturas asociadas a un embarque"""
+    try:
+        # Método 1: Facturas directamente vinculadas
+        facturas_directas = supabase.table('facturas').select("""
+            *,
+            proveedores!facturas_proveedor_id_fkey (nombre, pais_origen)
+        """).eq('embarque_id', embarque_id).execute()
+        
+        # Método 2: Facturas vinculadas por shipment_invoice
+        facturas_vinculadas = supabase.table('shipment_invoice').select("""
+            monto_asignado,
+            facturas!shipment_invoice_invoice_id_fkey (
+                *,
+                proveedores!facturas_proveedor_id_fkey (nombre, pais_origen)
+            )
+        """).eq('shipment_id', embarque_id).execute()
+        
+        # Combinar resultados
+        todas_facturas = []
+        
+        # Agregar facturas directas
+        for factura in facturas_directas.data:
+            factura['monto_asignado'] = factura['monto_total']
+            factura['vinculo_tipo'] = 'directo'
+            todas_facturas.append(factura)
+        
+        # Agregar facturas vinculadas (evitar duplicados)
+        facturas_directas_ids = {f['id'] for f in facturas_directas.data}
+        
+        for vinculo in facturas_vinculadas.data:
+            factura = vinculo['facturas']
+            if factura['id'] not in facturas_directas_ids:
+                factura['monto_asignado'] = vinculo['monto_asignado']
+                factura['vinculo_tipo'] = 'vinculado'
+                todas_facturas.append(factura)
+        
+        return {
+            "success": True,
+            "data": todas_facturas,
+            "total": len(todas_facturas)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+# =============================================
 # ENDPOINTS DE PAGOS DE FACTURAS
 # =============================================
 
